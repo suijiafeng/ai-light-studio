@@ -1,0 +1,34 @@
+{
+  "name": "ai-light-studio-web",
+  "version": "1.0.0",
+  "description": "代码工匠AI灯光设计工具 - 前端",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.7.7",
+    "cropperjs": "^1.6.2",
+    "element-plus": "^2.8.4",
+    "pinia": "^2.2.4",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^25.0.1",
+    "sass": "^1.79.4",
+    "vite": "^5.4.9",
+    "vitest": "^2.1.2"
+  }
+}
