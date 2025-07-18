@@ -38,6 +38,8 @@ app.config.errorHandler = (err, instance, info) => {
 window.addEventListener('unhandledrejection', e => {
   // 业务reject（带code的接口错误）不上报
   if (e.reason && e.reason.code !== undefined) return
+  // 弹窗取消（ElMessageBox reject 'cancel'/'close'）不是错误，不上报
+  if (e.reason === 'cancel' || e.reason === 'close') return
   reportError(e.reason?.message || e.reason, e.reason?.stack)
 })
 

@@ -79,14 +79,44 @@
         </div>
       </el-tab-pane>
 
-      <!-- 订单退款 -->
-      <el-tab-pane label="订单退款" name="refund">
+      <!-- 订单管理 -->
+      <el-tab-pane label="订单管理" name="orders">
         <div class="mk-card">
-          <p class="text-secondary" style="font-size:13px">输入订单号原路退款：订单置为已退款、扣回对应算力、回收会员时长。用户余额不足以扣回时会被拒绝。</p>
           <div class="search-row">
-            <el-input v-model="refundOrderId" placeholder="订单号（O开头）" style="width:280px" />
-            <el-input v-model="refundReason" placeholder="退款原因（选填）" style="width:220px" />
-            <el-button type="danger" plain :loading="refunding" @click="doRefund">执行退款</el-button>
+            <el-input v-model="orderKeyword" placeholder="搜索订单号/邮箱" clearable style="width:240px" @keyup.enter="loadOrders" />
+            <el-select v-model="orderStatus" placeholder="全部状态" clearable style="width:130px" @change="loadOrders">
+              <el-option label="已支付" value="paid" />
+              <el-option label="待支付" value="pending" />
+              <el-option label="已退款" value="refunded" />
+              <el-option label="已关闭" value="closed" />
+            </el-select>
+            <el-button type="primary" plain @click="loadOrders">搜索</el-button>
+          </div>
+          <el-table :data="orders" v-loading="loadingOrders" size="small">
+            <el-table-column prop="id" label="订单号" min-width="170" show-overflow-tooltip />
+            <el-table-column prop="email" label="用户" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="title" label="套餐" width="100" />
+            <el-table-column label="金额" width="90">
+              <template #default="{ row }">¥{{ row.amountYuan }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="{ paid: 'success', pending: 'warning', closed: 'info', refunded: 'danger' }[row.status]">
+                  {{ { paid: '已支付', pending: '待支付', closed: '已关闭', refunded: '已退款' }[row.status] }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="时间" width="150">
+              <template #default="{ row }">{{ new Date(row.createdAt).toLocaleString('zh-CN') }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="90">
+              <template #default="{ row }">
+                <el-button v-if="row.status === 'paid'" size="small" text type="danger" @click="refundRow(row)">退款</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="pager" v-if="orderTotal > 15">
+            <el-pagination v-model:current-page="orderPage" :page-size="15" :total="orderTotal" layout="prev, pager, next" background @current-change="loadOrders" />
           </div>
         </div>
       </el-tab-pane>
@@ -115,6 +145,7 @@
           <div class="gen-grid">
             <div v-for="g in gens" :key="g.id" class="gen-cell">
               <el-image :src="g.resultUrl || g.sourceUrl" fit="cover" class="gen-img" :preview-src-list="[g.resultUrl || g.sourceUrl]" />
+              <el-icon class="gen-del" title="删除违规内容" @click="removeGen(g)"><CircleCloseFilled /></el-icon>
               <div class="gen-meta text-secondary">{{ g.email }}<br />{{ new Date(g.createdAt).toLocaleString('zh-CN') }}</div>
             </div>
           </div>
@@ -127,7 +158,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiStatsOverview, apiAdminUsers, apiAdminAdjustCredits, apiAdminBan, apiAdminGenerations, apiAdminErrors, apiAdminRefund } from '@/api'
+import { apiStatsOverview, apiAdminUsers, apiAdminAdjustCredits, apiAdminBan, apiAdminGenerations, apiAdminErrors, apiAdminRefund, apiAdminOrders, apiAdminDeleteGeneration } from '@/api'
 
 const data = ref(null)
 const forbidden = ref(false)
@@ -136,12 +167,14 @@ const tab = ref('overview')
 const users = ref([]); const userTotal = ref(0); const userPage = ref(1); const keyword = ref(''); const loadingUsers = ref(false)
 const gens = ref([])
 const errors = ref([])
-const refundOrderId = ref(''); const refundReason = ref(''); const refunding = ref(false)
+const orders = ref([]); const orderTotal = ref(0); const orderPage = ref(1)
+const orderKeyword = ref(''); const orderStatus = ref(''); const loadingOrders = ref(false)
 
 onMounted(async () => {
   try {
     data.value = await apiStatsOverview()
     loadUsers()
+    loadOrders()
     gens.value = (await apiAdminGenerations()).list
     errors.value = (await apiAdminErrors()).list
   } catch (e) {
@@ -150,18 +183,43 @@ onMounted(async () => {
   }
 })
 
-const doRefund = async () => {
-  if (!refundOrderId.value.trim()) return ElMessage.warning('请输入订单号')
+const loadOrders = async () => {
+  loadingOrders.value = true
   try {
-    await ElMessageBox.confirm(`确认对订单 ${refundOrderId.value} 原路退款并扣回算力？`, '退款确认', { type: 'warning' })
-    refunding.value = true
-    await apiAdminRefund(refundOrderId.value.trim(), refundReason.value.trim())
+    const d = await apiAdminOrders({
+      page: orderPage.value, size: 15,
+      keyword: orderKeyword.value || undefined,
+      status: orderStatus.value || undefined
+    })
+    orders.value = d.list; orderTotal.value = d.total
+  } catch (e) { if (e.code !== -1 && e.code !== 403) ElMessage.error(e.message) }
+  finally { loadingOrders.value = false }
+}
+
+// 订单列表内一键退款
+const refundRow = async row => {
+  try {
+    await ElMessageBox.confirm(
+      `确认对订单 ${row.id}（${row.email}，¥${row.amountYuan}）原路退款？将扣回${row.credits}算力，会员套餐同时回收时长。`,
+      '退款确认', { type: 'warning', confirmButtonText: '确认退款' }
+    )
+    await apiAdminRefund(row.id, '管理员后台退款')
     ElMessage.success('退款成功')
-    refundOrderId.value = refundReason.value = ''
+    loadOrders()
   } catch (e) {
     if (e !== 'cancel' && e?.message && e?.code !== -1) ElMessage.error(e.message)
-  } finally {
-    refunding.value = false
+  }
+}
+
+// 删除违规生成内容
+const removeGen = async g => {
+  try {
+    await ElMessageBox.confirm(`确认删除 ${g.email} 的该条生成内容？图片文件将一并删除，不可恢复。`, '删除违规内容', { type: 'error' })
+    await apiAdminDeleteGeneration(g.id)
+    ElMessage.success('已删除')
+    gens.value = (await apiAdminGenerations()).list
+  } catch (e) {
+    if (e !== 'cancel' && e?.message && e?.code !== -1) ElMessage.error(e.message)
   }
 }
 
@@ -214,7 +272,13 @@ const toggleBan = async row => {
 .pager { display: flex; justify-content: center; margin-top: 14px; }
 .gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .gen-cell {
+  position: relative;
   .gen-img { width: 100%; height: 110px; border-radius: 8px; overflow: hidden; display: block; }
+  .gen-del {
+    position: absolute; top: 6px; right: 6px; cursor: pointer;
+    color: #f56c6c; background: #fff; border-radius: 50%; font-size: 18px;
+    opacity: 0.85; &:hover { opacity: 1; }
+  }
   .gen-meta { font-size: 11px; margin-top: 4px; line-height: 1.5; word-break: break-all; }
 }
 </style>

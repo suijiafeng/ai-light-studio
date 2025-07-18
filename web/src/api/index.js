@@ -56,3 +56,5 @@ export const apiAdminBan = (id, banned) => request.post(`/stats/users/${id}/ban`
 export const apiAdminGenerations = () => request.get('/stats/generations')
 export const apiAdminErrors = () => request.get('/stats/errors')
 export const apiAdminRefund = (orderId, reason) => request.post(`/pay/refund/${orderId}`, { reason })
+export const apiAdminOrders = params => request.get('/stats/orders', { params })
+export const apiAdminDeleteGeneration = id => request.delete(`/stats/generations/${id}`)

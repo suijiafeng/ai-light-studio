@@ -6,6 +6,53 @@ const { changeCredits } = require('../services/credits');
 
 const router = express.Router();
 
+// ---------- 订单管理（仅管理员） ----------
+router.get('/orders', auth, adminOnly, (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const size = Math.min(50, Math.max(1, Number(req.query.size) || 15));
+  const conds = [];
+  const args = [];
+  const kw = String(req.query.keyword || '').trim();
+  if (kw) { conds.push('(o.id LIKE ? OR u.email LIKE ?)'); args.push(`%${kw}%`, `%${kw}%`); }
+  if (['pending', 'paid', 'closed', 'refunded'].includes(req.query.status)) {
+    conds.push('o.status = ?'); args.push(req.query.status);
+  }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  const total = db.prepare(`SELECT COUNT(*) c FROM orders o JOIN users u ON u.id = o.user_id ${where}`).get(...args).c;
+  const rows = db.prepare(`
+    SELECT o.*, u.email FROM orders o JOIN users u ON u.id = o.user_id
+    ${where} ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).all(...args, size, (page - 1) * size);
+  return ok(res, {
+    total, page, size,
+    list: rows.map(o => ({
+      id: o.id, email: o.email, title: o.title,
+      amountYuan: (o.amount / 100).toFixed(2), credits: o.credits,
+      status: o.status, createdAt: o.created_at, paidAt: o.paid_at
+    }))
+  });
+});
+
+// 删除违规生成记录（含结果图与源图文件）
+router.delete('/generations/:id', auth, adminOnly, (req, res) => {
+  const g = db.prepare('SELECT * FROM generations WHERE id = ?').get(req.params.id);
+  if (!g) return fail(res, 404, '记录不存在');
+  const fs = require('fs');
+  const path = require('path');
+  const config = require('../config');
+  db.prepare('DELETE FROM generations WHERE id = ?').run(g.id);
+  // 结果图直接删；源图可能被其他记录（连拍/再次编辑）引用，无引用时才删
+  if (g.result_path) {
+    const p = path.join(config.resultDir, g.result_path);
+    if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) {} }
+  }
+  const stillUsed = db.prepare('SELECT COUNT(*) c FROM generations WHERE source_path = ?').get(g.source_path).c;
+  if (!stillUsed && g.source_path) {
+    const p = path.join(config.uploadDir, g.source_path);
+    if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) {} }
+  }
+  return ok(res, {}, '已删除该生成记录');
+});
+
 // ---------- 用户管理（仅管理员） ----------
 router.get('/users', auth, adminOnly, (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
