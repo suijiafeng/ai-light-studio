@@ -12,6 +12,7 @@
 | [docs/API.md](docs/API.md) | 全部接口定义、开放API调用示例 | 前后端/集成方 |
 | [docs/部署运维手册.md](docs/部署运维手册.md) | 服务器选型、上线部署、HTTPS、备份、安全加固、扩容路线 | 运维/上线负责人 |
 | [docs/二次开发指南.md](docs/二次开发指南.md) | 架构设计、代码地图、表结构、常见扩展做法、开发规范 | 接手的工程师 |
+| [docs/Lint配置指南.md](docs/Lint配置指南.md) | ESLint/Prettier 代码规范与格式化 | 开发者 |
 | [docs/常见问题FAQ.md](docs/常见问题FAQ.md) | 安装启动/功能使用/对接真实服务/数据迁移排障 | 所有人 |
 | [docs/改进方案-竞品对比版.md](docs/改进方案-竞品对比版.md) | 竞品分析与产品迭代路线图（P0已落地→P2） | 产品决策 |
 
@@ -102,6 +103,17 @@ npm run dev                 # http://localhost:5173（已配置代理到3000）
 
 ## 生产部署
 
+### Docker（推荐）
+
+```bash
+cp server/.env.example server/.env    # 修改 JWT_SECRET、支付、AI配置
+docker compose up -d --build          # http://localhost:3000
+```
+
+数据（数据库+图片）持久化在 `app-data` 卷中；详细说明（备份/升级/证书挂载）见 [docs/部署运维手册.md](docs/部署运维手册.md)。
+
+### 宿主机部署
+
 ```bash
 # 1. 打包前端
 cd web && npm install && npm run build     # 产物在 web/dist
@@ -176,7 +188,7 @@ server {
 
 | 层级 | 技术 | 数量 | 运行 |
 |---|---|---|---|
-| 后端接口测试 | Vitest + Supertest | 31例：认证/算力/生成/支付/限流/密钥/后台 | `cd server && npm test` |
+| 后端接口测试 | Vitest + Supertest | 42例：认证/算力/生成/支付/退款/上传校验/限流/密钥/后台/错误日志 | `cd server && npm test` |
 | 前端组件测试 | Vitest + Vue Test Utils | 15例：图库弹窗唯一性/工作台交互/充值流程/协议拦截/对比滑块 | `cd web && npm test` |
 | E2E冒烟测试 | Playwright（真实浏览器） | 注册→上传出图→图库对比→模拟充值到账，余额精确断言 | `cd web && npx playwright install chromium`（首次）→ `npm run test:e2e` |
 

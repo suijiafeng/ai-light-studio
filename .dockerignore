@@ -1,0 +1,33 @@
+# 依赖与构建产物（镜像内重新安装/构建）
+**/node_modules
+web/dist
+web/.vite
+web/vite.config.js.timestamp-*.mjs
+
+# 运行时数据与密钥（绝不打进镜像）
+server/data
+server/.env
+.env
+.env.*
+server/cert
+
+# 测试与文档
+**/tests
+**/*.test.js
+web/e2e
+web/playwright*.config.js
+docs
+*.md
+
+# 版本控制与本地文件
+.git
+.gitignore
+.DS_Store
+.vscode
+.idea
+*.log
+start.sh
+启动.command
+Dockerfile
+docker-compose.yml
+.dockerignore
