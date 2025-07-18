@@ -17,12 +17,13 @@ const registerLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, key: 'reg', 
 const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, key: 'login', message: '尝试次数过多，请15分钟后再试' });
 const codeLimit = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, key: 'code', message: '验证码请求太频繁，请稍后再试' });
 
-// 每日登录奖励：每个自然日首次访问赠送算力
+// 每日登录奖励：每个自然日首次访问赠送算力（原子条件更新，防并发重复发放）
 function grantDaily(userId) {
-  const u = db.prepare('SELECT last_daily_at FROM users WHERE id = ?').get(userId);
   const today = new Date().setHours(0, 0, 0, 0);
-  if (u && (!u.last_daily_at || u.last_daily_at < today)) {
-    db.prepare('UPDATE users SET last_daily_at = ? WHERE id = ?').run(Date.now(), userId);
+  const r = db.prepare(
+    'UPDATE users SET last_daily_at = ? WHERE id = ? AND (last_daily_at IS NULL OR last_daily_at < ?)'
+  ).run(Date.now(), userId, today);
+  if (r.changes > 0) {
     changeCredits(userId, config.dailyCredits, 'daily', `每日登录奖励${config.dailyCredits}算力`);
     return config.dailyCredits;
   }
@@ -79,19 +80,28 @@ router.post('/register', registerLimit, async (req, res) => {
   const id = uuid();
   const role = config.adminEmails.includes(email.toLowerCase()) ? 'admin' : 'user';
   const myInviteCode = id.slice(0, 8);
+  const passwordHash = await bcrypt.hash(password, 10); // 事务外完成异步哈希
   // 邀请人校验
   let inviter = null;
   if (inviteCode) {
     inviter = db.prepare('SELECT id FROM users WHERE invite_code = ?').get(String(inviteCode).trim());
   }
-  db.prepare('INSERT INTO users (id, email, password_hash, nickname, role, credits, created_at, invite_code, invited_by) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
-    .run(id, email.toLowerCase(), await bcrypt.hash(password, 10), nickname || email.split('@')[0], role, Date.now(), myInviteCode, inviter?.id || null);
-  // 新用户免费算力
-  changeCredits(id, config.freeCredits, 'register', `新用户注册赠送${config.freeCredits}算力`);
-  // 邀请裂变：双方各得奖励
-  if (inviter) {
-    changeCredits(id, config.inviteBonus, 'invite', `受邀注册奖励${config.inviteBonus}算力`);
-    changeCredits(inviter.id, config.inviteBonus, 'invite', `成功邀请好友奖励${config.inviteBonus}算力`);
+  // 建号+发算力放同一事务；并发重复注册由 email UNIQUE 约束兜底
+  try {
+    db.transaction(() => {
+      db.prepare('INSERT INTO users (id, email, password_hash, nickname, role, credits, created_at, invite_code, invited_by) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
+        .run(id, email.toLowerCase(), passwordHash, nickname || email.split('@')[0], role, Date.now(), myInviteCode, inviter?.id || null);
+      // 新用户免费算力
+      changeCredits(id, config.freeCredits, 'register', `新用户注册赠送${config.freeCredits}算力`);
+      // 邀请裂变：双方各得奖励
+      if (inviter) {
+        changeCredits(id, config.inviteBonus, 'invite', `受邀注册奖励${config.inviteBonus}算力`);
+        changeCredits(inviter.id, config.inviteBonus, 'invite', `成功邀请好友奖励${config.inviteBonus}算力`);
+      }
+    })();
+  } catch (e) {
+    if (/UNIQUE/i.test(e.message || '')) return fail(res, 400, '该邮箱已注册');
+    throw e;
   }
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);

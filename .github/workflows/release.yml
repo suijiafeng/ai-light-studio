@@ -1,0 +1,50 @@
+# 发布流水线：打版本标签自动构建镜像并推送到 GitHub 容器仓库（GHCR）
+#
+# 发布一个版本:
+#   git tag v1.1.0 && git push origin v1.1.0
+# 产出镜像（服务器直接拉取部署，无需在服务器上构建）:
+#   ghcr.io/<owner>/<repo>:v1.1.0 / :latest / :sha-xxxxxxx
+#
+# 服务器上使用发布镜像:
+#   docker pull ghcr.io/<owner>/<repo>:v1.1.0
+#   docker tag ghcr.io/<owner>/<repo>:v1.1.0 ai-light-studio:latest
+#   ./deploy.sh production
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 生成镜像标签（版本号 / latest / commit sha）
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

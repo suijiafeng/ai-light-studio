@@ -151,6 +151,62 @@ async function replicateRelight(sourcePath, params, outPath) {
 }
 
 /**
+ * fal.ai IC-Light V2 出图（队列模式：提交→轮询→下载）
+ * .env 配置 FAL_API_KEY 后，后台切换到"真实出图(fal)"即生效
+ */
+async function falRelight(sourcePath, params, outPath) {
+  const { falKey, falModel, timeoutMs } = config.ai;
+  if (!falKey) throw new Error('fal.ai 未配置：请在 .env 中填写 FAL_API_KEY');
+
+  const style = STYLE_PRESETS[params.style] || STYLE_PRESETS.night_warm;
+  const dir = DIRECTIONS[params.direction] || DIRECTIONS.none;
+  const prompt = [
+    style.prompt,
+    dir.prompt,
+    `color temperature ${params.colorTemp || style.temp}K`,
+    `brightness level ${params.brightness ?? 50}/100`,
+    'photorealistic interior, high quality, detailed'
+  ].join(', ');
+
+  const imgBuf = fs.readFileSync(sourcePath);
+  const dataUri = `data:image/${path.extname(sourcePath).slice(1).replace('jpg', 'jpeg') || 'jpeg'};base64,${imgBuf.toString('base64')}`;
+
+  // 1) 提交队列任务
+  const submit = await fetch(`https://queue.fal.run/${falModel}`, {
+    method: 'POST',
+    headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image_url: dataUri,
+      prompt,
+      negative_prompt: 'lowres, bad quality, distorted, cropped'
+    })
+  });
+  if (!submit.ok) throw new Error(`fal 提交任务失败: ${submit.status} ${(await submit.text()).slice(0, 200)}`);
+  const job = await submit.json();
+  const statusUrl = job.status_url || `https://queue.fal.run/${falModel}/requests/${job.request_id}/status`;
+  const resultUrl = job.response_url || `https://queue.fal.run/${falModel}/requests/${job.request_id}`;
+
+  // 2) 轮询状态
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    if (Date.now() > deadline) throw new Error('AI生成超时，请重试');
+    await new Promise(r => setTimeout(r, 2000));
+    const st = await (await fetch(statusUrl, { headers: { Authorization: `Key ${falKey}` } })).json();
+    if (st.status === 'COMPLETED') break;
+    if (st.status === 'FAILED' || st.status === 'ERROR') throw new Error(`AI生成失败: ${st.error || st.status}`);
+  }
+
+  // 3) 取结果并下载
+  const result = await (await fetch(resultUrl, { headers: { Authorization: `Key ${falKey}` } })).json();
+  const imageUrl = result.images?.[0]?.url || result.image?.url;
+  if (!imageUrl) throw new Error('fal 返回结果中没有图片');
+  const imgResp = await fetch(imageUrl);
+  if (!imgResp.ok) throw new Error('下载生成结果失败');
+  fs.writeFileSync(outPath, Buffer.from(await imgResp.arrayBuffer()));
+  return outPath;
+}
+
+/**
  * 出图后处理：付费/会员高清无水印，免费版限清+水印
  */
 async function finalizeImage(outPath, premium) {
@@ -203,7 +259,12 @@ async function applyMask(sourcePath, outPath, maskPath) {
 }
 
 async function relight(sourcePath, params, outPath, options = {}) {
-  if (config.ai.provider === 'replicate') {
+  // 模式由运行时设置决定（后台可切换），其次读 .env
+  const { currentAiProvider } = require('./settings');
+  const provider = currentAiProvider();
+  if (provider === 'fal') {
+    await falRelight(sourcePath, params, outPath);
+  } else if (provider === 'replicate') {
     await replicateRelight(sourcePath, params, outPath);
   } else {
     await mockRelight(sourcePath, params, outPath);

@@ -16,6 +16,8 @@ web/.vite/
 .env.*
 !.env.example
 !**/.env.example
+deploy/env/*.env
+!deploy/env/*.env.example
 
 # Logs
 *.log

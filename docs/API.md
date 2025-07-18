@@ -90,7 +90,17 @@ curl -X POST https://your-domain.com/api/generate -H "X-API-Key: als_xxx" -H "Co
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /stats/overview | 用户数/生成数/算力消耗/营收（总计+今日）+ 近7天趋势 |
+| GET | /stats/overview | 用户数/生成数/算力消耗/营收（总计+今日）+ 转化漏斗 `funnel`（注册→出图→算力耗尽→付费及转化率）+ 近7天趋势 |
+| GET | /stats/packages | 全部套餐（含已下架） |
+| POST | /stats/packages | 新建套餐 `{ type: credits/member, title, price(分), credits, days, desc, sort }` |
+| PUT | /stats/packages/:id | 修改套餐（仅影响后续购买，历史订单不变） |
+| POST | /stats/packages/:id/toggle | 上架/下架（不物理删除，保护历史订单引用） |
+
+## 套餐与会员折扣
+
+- 套餐存于数据库 `packages` 表（管理后台「套餐配置」在线增改/上下架），`config.packages` 仅作首次启动的种子数据
+- `GET /pay/packages` 返回 `memberDiscount`（默认0.9）；会员购算力包按该折扣计价，订单标题自动标注"会员X折"（`MEMBER_DISCOUNT=1` 关闭）
+- 生成任务对象含 `premium` 字段标识高清档（会员/付费用户 2048px 无水印，免费 1024px 水印）
 
 ## 静态资源
 

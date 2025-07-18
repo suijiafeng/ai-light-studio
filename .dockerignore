@@ -10,6 +10,7 @@ server/.env
 .env
 .env.*
 server/cert
+deploy
 
 # 测试与文档
 **/tests

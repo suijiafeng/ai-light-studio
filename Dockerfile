@@ -30,6 +30,7 @@ WORKDIR /app
 COPY --from=server-deps /build/server/node_modules ./server/node_modules
 COPY server/package.json ./server/
 COPY server/src ./server/src
+COPY server/scripts ./server/scripts
 # 后端按 ../../web/dist 相对路径托管前端产物，目录结构需与仓库一致
 COPY --from=web-builder /build/web/dist ./web/dist
 

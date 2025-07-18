@@ -2,6 +2,7 @@
   <div class="page-container studio">
     <div class="page-title">
       <el-icon class="mk-gradient-text"><MagicStick /></el-icon> AI灯光工作台
+      <el-tag v-if="aiProvider === 'mock'" type="warning" effect="plain" size="small" round>演示模式</el-tag>
       <span class="text-secondary cost-tip">每次生成消耗 {{ cost }} 算力 · 当前余额 {{ userStore.credits }}</span>
     </div>
 
@@ -144,6 +145,13 @@
               <el-button size="small" type="primary" plain @click="download"><el-icon><Download /></el-icon>下载</el-button>
               <el-button size="small" plain @click="editResult"><el-icon><EditPen /></el-icon>再次编辑</el-button>
             </div>
+            <div class="tier-line">
+              <el-tag v-if="result.premium" type="warning" effect="dark" size="small" round>2048px 高清 · 无水印</el-tag>
+              <template v-else>
+                <el-tag type="info" size="small" round>免费版 1024px · 含水印</el-tag>
+                <el-link type="primary" :underline="false" @click="$router.push('/recharge')">开通会员享2048px高清无水印 →</el-link>
+              </template>
+            </div>
           </div>
           <p v-else class="text-secondary small center">点击上方缩略图查看大图</p>
         </div>
@@ -158,6 +166,13 @@
             <el-button size="small" plain @click="editResult"><el-icon><EditPen /></el-icon>再次编辑</el-button>
             <el-button size="small" plain @click="share"><el-icon><Share /></el-icon>分享</el-button>
             <el-button size="small" plain @click="$router.push(`/report/${result.id}`)"><el-icon><Document /></el-icon>报告</el-button>
+          </div>
+          <div class="tier-line">
+            <el-tag v-if="result.premium" type="warning" effect="dark" size="small" round>2048px 高清 · 无水印</el-tag>
+            <template v-else>
+              <el-tag type="info" size="small" round>免费版 1024px · 含水印</el-tag>
+              <el-link type="primary" :underline="false" @click="$router.push('/recharge')">开通会员享2048px高清无水印 →</el-link>
+            </template>
           </div>
         </div>
 
@@ -233,6 +248,7 @@ const directions = ref([
 const styleNames = { night_warm: '夜景暖光', daylight: '日间自然光', office_cool: '办公冷光', wall_wash: '氛围洗墙光' }
 const cost = ref(5)
 const multiCost = ref(8)
+const aiProvider = ref('mock')
 const source = reactive({ fileId: '', url: '' })
 const params = reactive({ style: 'night_warm', brightness: 50, colorTemp: 3000, intensity: 50, detail: 50, direction: 'none' })
 const batchResults = ref([])
@@ -260,6 +276,7 @@ onMounted(async () => {
     if (data.directions) directions.value = data.directions
     cost.value = data.costPerGeneration
     multiCost.value = data.multiCost || 8
+    if (data.aiProvider) aiProvider.value = data.aiProvider
   } catch (e) { /* 网络错误已统一提示 */ }
   // 从历史图库「再次编辑」进入
   if (route.query.fileId) {
@@ -572,6 +589,7 @@ const editResult = async () => {
   flex-wrap: wrap; // 按钮多时自动换行，避免溢出被裁剪
   .el-button { margin: 0; }
 }
+.tier-line { display: flex; gap: 10px; margin-top: 10px; justify-content: center; align-items: center; font-size: 13px; }
 
 .param-label { font-size: 13px; margin: 10px 0 2px; font-weight: 600; display: flex; justify-content: space-between; }
 .style-grid {

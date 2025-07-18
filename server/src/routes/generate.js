@@ -14,11 +14,49 @@ const { rateLimit } = require('../middleware/rateLimit');
 const router = express.Router();
 const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: '生成请求太频繁，请稍后再试' });
 
-// 是否享受高清无水印：会员 或 有任意已支付订单
+// ---------- 启动恢复：上次进程退出时卡在 processing 的任务，标记失败并退还算力 ----------
+(() => {
+  const stale = db.prepare("SELECT id, user_id, cost FROM generations WHERE status = 'processing'").all();
+  if (!stale.length) return;
+  db.transaction(() => {
+    const mark = db.prepare("UPDATE generations SET status = 'failed', error = '服务重启导致任务中断', finished_at = ? WHERE id = ?");
+    for (const g of stale) {
+      mark.run(Date.now(), g.id);
+      if (g.cost > 0) changeCredits(g.user_id, g.cost, 'refund', '任务中断退还算力');
+    }
+  })();
+  console.log(`ℹ️  已清理 ${stale.length} 个中断的生成任务并退还算力`);
+})();
+
+// ---------- 轻量并发队列：限制同时出图数，防止批量任务打满 CPU/外部 API ----------
+const MAX_CONCURRENT = Math.max(1, Number(process.env.GEN_CONCURRENCY || 3));
+let running = 0;
+const pending = [];
+function enqueue(task) {
+  return new Promise((resolve, reject) => {
+    pending.push({ task, resolve, reject });
+    drainQueue();
+  });
+}
+function drainQueue() {
+  while (running < MAX_CONCURRENT && pending.length) {
+    const { task, resolve, reject } = pending.shift();
+    running++;
+    Promise.resolve()
+      .then(task)
+      .then(resolve, reject)
+      .finally(() => { running--; drainQueue(); });
+  }
+}
+
+// 是否享受高清无水印：会员 或 有任意已支付订单（单条SQL）
 function isPremium(userId) {
-  const u = db.prepare('SELECT member_expires_at FROM users WHERE id = ?').get(userId);
-  if (u?.member_expires_at && u.member_expires_at > Date.now()) return true;
-  return !!db.prepare("SELECT id FROM orders WHERE user_id = ? AND status = 'paid' LIMIT 1").get(userId);
+  const row = db.prepare(`
+    SELECT (
+      EXISTS(SELECT 1 FROM users WHERE id = ? AND member_expires_at > ?)
+      OR EXISTS(SELECT 1 FROM orders WHERE user_id = ? AND status = 'paid')
+    ) AS p`).get(userId, Date.now(), userId);
+  return !!row?.p;
 }
 
 // 参数校验，返回错误信息或null
@@ -105,7 +143,8 @@ router.get('/styles', (req, res) => {
     { key: 'none', name: '环境光' }, { key: 'left', name: '左侧' }, { key: 'right', name: '右侧' },
     { key: 'top', name: '顶部' }, { key: 'bottom', name: '底部' }
   ];
-  return ok(res, { styles, directions, costPerGeneration: config.costPerGeneration, multiCost: config.multiCost });
+  const { currentAiProvider } = require('../services/settings');
+  return ok(res, { styles, directions, costPerGeneration: config.costPerGeneration, multiCost: config.multiCost, aiProvider: currentAiProvider() });
 });
 
 // 校验并返回蒙版路径（局部重绘）
@@ -118,11 +157,11 @@ function resolveMask(params) {
 // 启动一条异步生成任务（内部复用）
 function startJob({ userId, sourcePath, params, cost, premium, batchId = null }) {
   const id = uuid();
-  db.prepare('INSERT INTO generations (id, user_id, source_path, params, status, cost, created_at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, userId, path.basename(sourcePath), JSON.stringify(params), 'processing', cost, Date.now(), batchId);
+  db.prepare('INSERT INTO generations (id, user_id, source_path, params, status, cost, created_at, batch_id, premium) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, userId, path.basename(sourcePath), JSON.stringify(params), 'processing', cost, Date.now(), batchId, premium ? 1 : 0);
   const outName = `${id}.jpg`;
   const outPath = path.join(config.resultDir, outName);
-  relight(sourcePath, params, outPath, { premium, maskPath: resolveMask(params) })
+  enqueue(() => relight(sourcePath, params, outPath, { premium, maskPath: resolveMask(params) }))
     .then(() => {
       db.prepare('UPDATE generations SET status = ?, result_path = ?, finished_at = ? WHERE id = ?')
         .run('success', outName, Date.now(), id);
@@ -341,6 +380,7 @@ const toItem = g => ({
   status: g.status,
   error: g.error,
   cost: g.cost,
+  premium: !!g.premium,
   createdAt: g.created_at,
   finishedAt: g.finished_at
 });

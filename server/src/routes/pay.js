@@ -34,23 +34,43 @@ const toOrder = o => ({
   createdAt: o.created_at, paidAt: o.paid_at
 });
 
+// 套餐从数据库读取（管理后台可在线配置），config.packages 仅作首次种子
+const toPkg = r => ({
+  id: r.id, type: r.type, title: r.title, price: r.price,
+  credits: r.credits, days: r.days, desc: r.description,
+  priceYuan: (r.price / 100).toFixed(2)
+});
+
 // 套餐列表
 router.get('/packages', (req, res) => {
+  const rows = db.prepare('SELECT * FROM packages WHERE active = 1 ORDER BY sort ASC, rowid ASC').all();
   return ok(res, {
-    packages: config.packages.map(p => ({ ...p, priceYuan: (p.price / 100).toFixed(2) })),
+    packages: rows.map(toPkg),
+    memberDiscount: config.memberDiscount,
     payProvider: config.pay.provider
   });
 });
 
+// 会员购算力包享折扣价（单位分）
+function orderPrice(pkg, userId) {
+  if (pkg.type !== 'credits' || config.memberDiscount >= 1) return pkg.price;
+  const u = db.prepare('SELECT member_expires_at FROM users WHERE id = ?').get(userId);
+  const isMember = u?.member_expires_at && u.member_expires_at > Date.now();
+  return isMember ? Math.round(pkg.price * config.memberDiscount) : pkg.price;
+}
+
 // 创建充值订单
 router.post('/order', auth, async (req, res) => {
-  const pkg = config.packages.find(p => p.id === (req.body || {}).packageId);
-  if (!pkg) return fail(res, 400, '套餐不存在');
+  const row = db.prepare('SELECT * FROM packages WHERE id = ? AND active = 1').get((req.body || {}).packageId || '');
+  if (!row) return fail(res, 400, '套餐不存在或已下架');
+  const pkg = toPkg(row);
+  const amount = orderPrice(pkg, req.user.id);
+  const title = amount < pkg.price ? `${pkg.title}（会员${config.memberDiscount * 10}折）` : pkg.title;
   const id = `O${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
   db.prepare('INSERT INTO orders (id, user_id, package_id, title, amount, credits, member_days, status, pay_method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, req.user.id, pkg.id, pkg.title, pkg.price, pkg.credits, pkg.days || 0, 'pending', 'wechat', Date.now());
+    .run(id, req.user.id, pkg.id, title, amount, pkg.credits, pkg.days || 0, 'pending', 'wechat', Date.now());
   try {
-    const { codeUrl, mock } = await createNativeOrder({ id, title: `AI灯光设计-${pkg.title}`, amount: pkg.price });
+    const { codeUrl, mock } = await createNativeOrder({ id, title: `AI灯光设计-${title}`, amount });
     return ok(res, { orderId: id, codeUrl, mock }, '下单成功');
   } catch (e) {
     db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('closed', id);

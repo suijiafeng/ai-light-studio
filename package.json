@@ -1,0 +1,38 @@
+{
+  "name": "ai-light-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "代码工匠 · AI灯光设计SaaS —— 根目录快捷命令入口（npm run 查看全部）",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "npm --prefix server install --no-audit --no-fund && npm --prefix web install --no-audit --no-fund",
+
+    "dev": "bash ./start.sh",
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix server start",
+    "prod": "npm run build && npm run start",
+
+    "test": "npm --prefix server test && npm --prefix web test",
+    "test:server": "npm --prefix server test",
+    "test:web": "npm --prefix web test",
+    "test:e2e": "npm --prefix web run test:e2e",
+
+    "lint": "npm --prefix server run lint && npm --prefix web run lint",
+    "lint:fix": "npm --prefix server run lint:fix && npm --prefix web run lint:fix",
+    "format": "npm --prefix server run format && npm --prefix web run format",
+
+    "seed": "npm --prefix server run seed",
+    "smoke": "bash ./scripts/smoke.sh",
+
+    "deploy:prod": "bash ./deploy.sh production",
+    "deploy:staging": "bash ./deploy.sh staging",
+    "deploy:demo": "bash ./deploy.sh demo --seed",
+
+    "docker:build": "docker build -t ai-light-studio ."
+  }
+}

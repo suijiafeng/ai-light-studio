@@ -4,7 +4,9 @@
       <span class="text-secondary balance">当前余额：<b>{{ userStore.credits }}</b> 算力</span>
     </div>
 
-    <div class="section-title">算力充值包</div>
+    <div class="section-title">算力充值包
+      <el-tag v-if="hasMemberDiscount" type="warning" size="small" round effect="plain">会员专享{{ discountLabel }}折</el-tag>
+    </div>
     <div class="pkg-grid">
       <div
         v-for="p in creditPackages" :key="p.id"
@@ -13,7 +15,10 @@
         @click="selected = p.id"
       >
         <div class="pkg-title ellipsis">{{ p.title }}</div>
-        <div class="pkg-price">¥<b>{{ p.priceYuan }}</b></div>
+        <div v-if="hasMemberDiscount" class="pkg-price">
+          ¥<b>{{ discountPrice(p) }}</b> <s class="text-secondary origin">¥{{ p.priceYuan }}</s>
+        </div>
+        <div v-else class="pkg-price">¥<b>{{ p.priceYuan }}</b></div>
         <div class="pkg-credits mk-gradient-text ellipsis">{{ p.credits }} 算力</div>
         <div class="text-secondary pkg-desc clamp-2">{{ p.desc }}</div>
       </div>
@@ -74,13 +79,18 @@ const isMock = ref(false)
 const mockPaying = ref(false)
 let pollTimer = null
 
+const memberDiscount = ref(1)
 const creditPackages = computed(() => packages.value.filter(p => p.type === 'credits'))
 const memberPackages = computed(() => packages.value.filter(p => p.type === 'member'))
+const hasMemberDiscount = computed(() => userStore.isMember && memberDiscount.value < 1)
+const discountLabel = computed(() => String(memberDiscount.value * 10).replace(/\.0$/, ''))
+const discountPrice = p => (Math.round(p.price * memberDiscount.value) / 100).toFixed(2)
 
 onMounted(async () => {
   try {
     const data = await apiPackages()
     packages.value = data.packages
+    memberDiscount.value = data.memberDiscount || 1
   } catch (e) { if (e.code !== -1) ElMessage.error(e.message) }
   userStore.fetchMe()
 })
@@ -141,7 +151,7 @@ const mockPay = async () => {
   text-align: center; cursor: pointer; position: relative; padding: 24px 16px;
   &.active { border-color: var(--mk-primary); box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.35); }
   .pkg-title { font-weight: 700; font-size: 15px; }
-  .pkg-price { margin: 10px 0 2px; b { font-size: 28px; } }
+  .pkg-price { margin: 10px 0 2px; b { font-size: 28px; } .origin { font-size: 13px; margin-left: 4px; } }
   .pkg-credits { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
   .pkg-desc { font-size: 12px; line-height: 1.6; min-height: 38px; }
   .member-tag { position: absolute; top: 10px; right: 10px; }

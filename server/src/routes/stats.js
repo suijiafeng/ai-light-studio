@@ -1,10 +1,37 @@
 const express = require('express');
 const db = require('../db');
+const config = require('../config');
 const { ok, fail } = require('../utils/response');
 const { auth, adminOnly } = require('../middleware/auth');
 const { changeCredits } = require('../services/credits');
 
 const router = express.Router();
+
+// ---------- AI出图模式切换（仅管理员，运行时生效无需重启） ----------
+const settings = require('../services/settings');
+const cfg = require('../config');
+
+router.get('/ai-mode', auth, adminOnly, (req, res) => {
+  return ok(res, {
+    provider: settings.currentAiProvider(),
+    available: {
+      mock: true,
+      fal: !!cfg.ai.falKey,
+      replicate: !!(cfg.ai.replicateToken && cfg.ai.replicateVersion)
+    }
+  });
+});
+
+router.post('/ai-mode', auth, adminOnly, (req, res) => {
+  const { provider } = req.body || {};
+  if (!['mock', 'fal', 'replicate'].includes(provider)) return fail(res, 400, '无效的模式');
+  if (provider === 'fal' && !cfg.ai.falKey) return fail(res, 400, '未配置 FAL_API_KEY，无法切换到fal真实出图');
+  if (provider === 'replicate' && !(cfg.ai.replicateToken && cfg.ai.replicateVersion)) {
+    return fail(res, 400, '未配置 Replicate 参数，无法切换');
+  }
+  settings.set('ai_provider', provider);
+  return ok(res, { provider }, provider === 'mock' ? '已切换为演示模式（本地模拟出图）' : `已切换为真实出图（${provider}）`);
+});
 
 // ---------- 订单管理（仅管理员） ----------
 router.get('/orders', auth, adminOnly, (req, res) => {
@@ -122,6 +149,61 @@ router.get('/generations', auth, adminOnly, (req, res) => {
   });
 });
 
+// ---------- 套餐在线配置（仅管理员，替代写死config） ----------
+const pkgRow = r => ({
+  id: r.id, type: r.type, title: r.title, price: r.price,
+  priceYuan: (r.price / 100).toFixed(2), credits: r.credits, days: r.days,
+  desc: r.description, sort: r.sort, active: !!r.active
+});
+
+function validatePkg(body) {
+  const { type, title, price, credits, days } = body || {};
+  if (!['credits', 'member'].includes(type)) return '套餐类型需为 credits 或 member';
+  if (!title || !String(title).trim()) return '请填写套餐名称';
+  if (!Number.isInteger(price) || price <= 0) return '价格需为正整数（单位：分）';
+  if (!Number.isInteger(credits) || credits <= 0) return '算力需为正整数';
+  if (type === 'member' && (!Number.isInteger(days) || days <= 0)) return '会员套餐需填写有效天数';
+  return null;
+}
+
+// 全部套餐（含已下架）
+router.get('/packages', auth, adminOnly, (req, res) => {
+  const rows = db.prepare('SELECT * FROM packages ORDER BY sort ASC, rowid ASC').all();
+  return ok(res, { list: rows.map(pkgRow) });
+});
+
+// 新建套餐
+router.post('/packages', auth, adminOnly, (req, res) => {
+  const errMsg = validatePkg(req.body);
+  if (errMsg) return fail(res, 400, errMsg);
+  const { type, title, price, credits, days = 0, desc = '', sort = 99 } = req.body;
+  const id = `pk_${Date.now()}`;
+  db.prepare('INSERT INTO packages (id, type, title, price, credits, days, description, sort, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)')
+    .run(id, type, String(title).trim(), price, credits, type === 'member' ? days : 0, desc, sort);
+  return ok(res, { id }, '套餐已创建');
+});
+
+// 修改套餐（历史订单不受影响，仅影响后续购买）
+router.put('/packages/:id', auth, adminOnly, (req, res) => {
+  const row = db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id);
+  if (!row) return fail(res, 404, '套餐不存在');
+  const errMsg = validatePkg(req.body);
+  if (errMsg) return fail(res, 400, errMsg);
+  const { type, title, price, credits, days = 0, desc = '', sort } = req.body;
+  db.prepare('UPDATE packages SET type = ?, title = ?, price = ?, credits = ?, days = ?, description = ?, sort = ? WHERE id = ?')
+    .run(type, String(title).trim(), price, credits, type === 'member' ? days : 0, desc, sort ?? row.sort, row.id);
+  return ok(res, {}, '套餐已更新');
+});
+
+// 上架/下架（不做物理删除，避免历史订单失去引用）
+router.post('/packages/:id/toggle', auth, adminOnly, (req, res) => {
+  const row = db.prepare('SELECT id, active FROM packages WHERE id = ?').get(req.params.id);
+  if (!row) return fail(res, 404, '套餐不存在');
+  const active = row.active ? 0 : 1;
+  db.prepare('UPDATE packages SET active = ? WHERE id = ?').run(active, row.id);
+  return ok(res, { active: !!active }, active ? '已上架' : '已下架');
+});
+
 // 后台数据总览（仅管理员）
 router.get('/overview', auth, adminOnly, (req, res) => {
   const now = Date.now();
@@ -150,6 +232,19 @@ router.get('/overview', auth, adminOnly, (req, res) => {
       today: db.prepare("SELECT COALESCE(SUM(amount),0) s FROM orders WHERE status = 'paid' AND paid_at >= ?").get(dayStart).s,
       orders: q("SELECT COUNT(*) c FROM orders WHERE status = 'paid'").c
     },
+    // 转化漏斗：注册 → 出过图 → 算力耗尽（余额不够一次生成）→ 付过费
+    funnel: (() => {
+      const registered = q('SELECT COUNT(*) c FROM users').c;
+      const generated = q('SELECT COUNT(DISTINCT user_id) c FROM generations').c;
+      const exhausted = db.prepare('SELECT COUNT(*) c FROM users WHERE credits < ?').get(config.costPerGeneration).c;
+      const paid = q("SELECT COUNT(DISTINCT user_id) c FROM orders WHERE status = 'paid'").c;
+      const rate = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+      return {
+        registered, generated, exhausted, paid,
+        generatedRate: rate(generated, registered), // 注册→出图
+        paidRate: rate(paid, registered)            // 注册→付费
+      };
+    })(),
     // 近7天趋势
     trend: [...Array(7)].map((_, i) => {
       const start = dayStart - (6 - i) * 86400000;

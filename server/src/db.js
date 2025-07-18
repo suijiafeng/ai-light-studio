@@ -132,7 +132,32 @@ CREATE TABLE IF NOT EXISTS error_logs (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_err_time ON error_logs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 `);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS packages (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  credits INTEGER NOT NULL,
+  days INTEGER DEFAULT 0,
+  description TEXT,
+  sort INTEGER DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1
+);
+`);
+
+// 套餐种子数据：首次启动从 config.packages 导入，之后以数据库为准（管理后台可在线配置）
+if (db.prepare('SELECT COUNT(*) c FROM packages').get().c === 0) {
+  const ins = db.prepare('INSERT INTO packages (id, type, title, price, credits, days, description, sort, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)');
+  config.packages.forEach((p, i) => ins.run(p.id, p.type, p.title, p.price, p.credits, p.days || 0, p.desc || '', i));
+}
 
 // 兼容旧库的增量字段（已存在则忽略）
 for (const sql of [
@@ -141,9 +166,16 @@ for (const sql of [
   'ALTER TABLE users ADD COLUMN invited_by TEXT',
   'ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0',
   'ALTER TABLE generations ADD COLUMN batch_id TEXT',
-  'ALTER TABLE generations ADD COLUMN share_id TEXT'
+  'ALTER TABLE generations ADD COLUMN share_id TEXT',
+  'ALTER TABLE generations ADD COLUMN premium INTEGER DEFAULT 0'
 ]) {
   try { db.exec(sql); } catch (e) { /* column exists */ }
 }
+
+// 增量字段的配套索引（需在 ALTER 之后创建）
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_gen_batch ON generations(batch_id);
+CREATE INDEX IF NOT EXISTS idx_gen_share ON generations(share_id);
+`);
 
 module.exports = db;

@@ -12,6 +12,18 @@
         <el-option label="生成中" value="processing" />
       </el-select>
       <span class="text-secondary count">共 {{ total }} 条</span>
+      <template v-if="list.length">
+        <el-button v-if="!compareMode" size="small" plain round @click="compareMode = true">
+          <el-icon><Switch /></el-icon>&nbsp;方案对比
+        </el-button>
+        <template v-else>
+          <span class="text-secondary compare-tip">勾选2-4个成功方案</span>
+          <el-button size="small" type="primary" round :disabled="picked.length < 2" @click="compareVisible = true">
+            开始对比（{{ picked.length }}/4）
+          </el-button>
+          <el-button size="small" round @click="exitCompare">取消</el-button>
+        </template>
+      </template>
     </div>
 
     <el-skeleton v-if="loading && !list.length" :rows="5" animated />
@@ -21,11 +33,14 @@
     </el-empty>
 
     <div v-else class="gallery">
-      <div v-for="item in list" :key="item.id" class="mk-card hoverable item">
-        <div class="thumb" @click="openView(item)">
+      <div v-for="item in list" :key="item.id" class="mk-card hoverable item" :class="{ picked: isPicked(item) }">
+        <div class="thumb" :class="{ pickable: compareMode && item.status === 'success' }" @click="compareMode ? togglePick(item) : openView(item)">
           <el-image :src="item.resultUrl || item.sourceUrl" fit="cover" class="img" lazy />
           <el-tag v-if="item.status === 'failed'" type="danger" size="small" class="badge">失败</el-tag>
           <el-tag v-else-if="item.status === 'processing'" type="warning" size="small" class="badge">生成中</el-tag>
+          <el-tag v-else-if="item.premium" type="warning" size="small" effect="dark" class="badge">2048px·高清</el-tag>
+          <el-tag v-else type="info" size="small" class="badge">1024px·水印</el-tag>
+          <div v-if="isPicked(item)" class="pick-mark"><el-icon><Select /></el-icon></div>
         </div>
         <div class="meta">
           <span class="text-secondary ellipsis">{{ styleName(item.params.style) }} · {{ formatTime(item.createdAt) }}</span>
@@ -75,6 +90,20 @@
       </template>
     </el-dialog>
 
+    <!-- 多方案并排对比弹窗 -->
+    <el-dialog v-model="compareVisible" title="方案对比" :width="picked.length > 2 ? '92%' : '760px'" top="6vh">
+      <div class="compare-grid" :style="{ gridTemplateColumns: `repeat(${picked.length}, 1fr)` }">
+        <div v-for="item in picked" :key="item.id" class="compare-cell">
+          <el-image :src="item.resultUrl" fit="cover" class="compare-img" :preview-src-list="picked.map(p => p.resultUrl)" />
+          <div class="compare-name">{{ styleName(item.params.style) }}</div>
+          <div class="compare-params text-secondary">
+            {{ item.params.colorTemp || '-' }}K · 亮度{{ item.params.brightness ?? '-' }} · {{ dirName(item.params.direction) }}
+            <br />{{ formatTime(item.createdAt) }}
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <div v-if="total > size" class="pager">
       <el-pagination
         v-model:current-page="page"
@@ -106,9 +135,32 @@ const filterStatus = ref('')
 
 const STYLE_NAMES = { night_warm: '夜景暖光', daylight: '日间自然光', office_cool: '办公冷光', wall_wash: '氛围洗墙光' }
 
+const DIR_NAMES = { none: '环境光', left: '左侧光', right: '右侧光', top: '顶部光', bottom: '底部光' }
+
 const reload = () => { page.value = 1; load() }
 const styleName = k => STYLE_NAMES[k] || '自定义'
+const dirName = k => DIR_NAMES[k] || '环境光'
 const formatTime = ts => new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+// ---------- 多方案并排对比 ----------
+const compareMode = ref(false)
+const compareVisible = ref(false)
+const picked = ref([])
+const isPicked = item => picked.value.some(p => p.id === item.id)
+const togglePick = item => {
+  if (item.status !== 'success') return
+  if (isPicked(item)) {
+    picked.value = picked.value.filter(p => p.id !== item.id)
+  } else if (picked.value.length >= 4) {
+    ElMessage.warning('最多对比4个方案')
+  } else {
+    picked.value.push(item)
+  }
+}
+const exitCompare = () => {
+  compareMode.value = false
+  picked.value = []
+}
 
 const load = async () => {
   loading.value = true
@@ -176,7 +228,12 @@ const remove = async item => {
 }
 .item {
   padding: 12px;
-  .thumb { position: relative; cursor: zoom-in; }
+  &.picked { border-color: var(--mk-primary); box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.35); }
+  .thumb { position: relative; cursor: zoom-in; &.pickable { cursor: pointer; } }
+  .pick-mark {
+    position: absolute; top: 8px; left: 8px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--mk-primary); color: #fff; display: flex; align-items: center; justify-content: center;
+  }
   .img { width: 100%; height: 190px; border-radius: 10px; overflow: hidden; display: block; }
   .badge { position: absolute; top: 8px; right: 8px; }
   .meta {
@@ -192,4 +249,11 @@ const remove = async item => {
 }
 .pager { display: flex; justify-content: center; margin-top: 26px; }
 .view-tip { font-size: 12px; text-align: center; margin: 10px 0 0; }
+.compare-tip { font-size: 12px; }
+.compare-grid { display: grid; gap: 14px; }
+.compare-cell {
+  .compare-img { width: 100%; aspect-ratio: 4/3; border-radius: 10px; overflow: hidden; display: block; }
+  .compare-name { font-weight: 700; margin: 8px 0 2px; }
+  .compare-params { font-size: 12px; line-height: 1.7; }
+}
 </style>

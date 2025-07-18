@@ -33,7 +33,9 @@ module.exports = {
   emailVerify: process.env.EMAIL_VERIFY === 'on',
 
   ai: {
-    provider: process.env.AI_PROVIDER || 'mock',
+    provider: process.env.AI_PROVIDER || 'mock', // mock演示 | fal | replicate（后台可运行时切换）
+    falKey: process.env.FAL_API_KEY || '',
+    falModel: process.env.FAL_MODEL || 'fal-ai/iclight-v2',
     replicateToken: process.env.REPLICATE_API_TOKEN || '',
     replicateVersion: process.env.REPLICATE_MODEL_VERSION || '',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 180000)

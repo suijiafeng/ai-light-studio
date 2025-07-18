@@ -1,33 +1,32 @@
 # ============================================
-# 代码工匠 · AI灯光设计 — Docker Compose 部署
+# 代码工匠 · AI灯光设计 — Docker Compose（多环境参数化）
 #
-# 首次使用:
-#   cp server/.env.example server/.env   # 按需修改配置（JWT_SECRET等）
-#   docker compose up -d --build
-#   打开 http://localhost:3000
+# 推荐通过 ./deploy.sh 使用（自动处理环境隔离）:
+#   ./deploy.sh production    # 生产 :3000
+#   ./deploy.sh staging       # 测试 :3001
+#   ./deploy.sh demo          # 演示 :3002（含种子数据）
 #
-# 常用命令:
-#   docker compose logs -f          # 查看日志
-#   docker compose restart         # 重启
-#   docker compose down            # 停止（数据保留在卷中）
-#   docker compose up -d --build   # 代码更新后重新构建
+# 也可单环境直接使用:
+#   cp server/.env.example server/.env
+#   docker compose up -d --build      # http://localhost:3000
+#
+# 可注入变量: APP_PORT 宿主机端口 / APP_ENV_FILE 配置文件路径 / IMAGE_TAG 镜像标签
 # ============================================
 services:
-  ai-light-studio:
+  app:
     build: .
-    image: ai-light-studio:latest
-    container_name: ai-light-studio
+    image: ai-light-studio:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    # server/.env 不打进镜像，由这里在启动时注入
+      - "${APP_PORT:-3000}:3000"
+    # 配置文件不打进镜像，启动时注入；deploy.sh 会指向 deploy/env/<环境>.env
     env_file:
-      - server/.env
+      - ${APP_ENV_FILE:-server/.env}
     environment:
       - NODE_ENV=production
       - PORT=3000
     volumes:
-      # 数据库 + 上传图 + 生成结果图，全部持久化在命名卷中
+      # 数据库 + 上传图 + 结果图；随 compose project 命名，环境间互相隔离
       - app-data:/app/server/data
       # 对接真实微信支付时，取消下面注释挂载商户证书目录
       # - ./server/cert:/app/server/cert:ro

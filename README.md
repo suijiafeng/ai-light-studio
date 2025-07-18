@@ -20,6 +20,20 @@
 
 macOS双击根目录的 **启动.command**，或终端运行 `./start.sh` —— 自动检查Node、安装依赖、生成配置、启动前后端并打开浏览器；Ctrl+C 一键全停。
 
+## 根目录快捷命令
+
+根目录 `package.json` 汇总了全部常用命令（`npm run` 查看完整列表）：
+
+| 命令 | 作用 |
+|---|---|
+| `npm run setup` | 一次装齐前后端依赖 |
+| `npm run dev` | 本地开发（等同 ./start.sh，前后端一起起） |
+| `npm test` | 跑全部测试（后端接口 + 前端组件） |
+| `npm run test:e2e` | Playwright 端到端测试 |
+| `npm run build` / `npm run prod` | 打包前端 / 打包并单端口起生产模式 |
+| `npm run seed` / `npm run smoke` | 演示种子数据 / 冒烟验证 |
+| `npm run deploy:prod` / `deploy:staging` / `deploy:demo` | Docker 三环境一键部署 |
+
 ## 技术栈
 
 | 层 | 技术 |
@@ -103,14 +117,17 @@ npm run dev                 # http://localhost:5173（已配置代理到3000）
 
 ## 生产部署
 
-### Docker（推荐）
+### Docker 多环境一键部署（推荐）
 
 ```bash
-cp server/.env.example server/.env    # 修改 JWT_SECRET、支付、AI配置
-docker compose up -d --build          # http://localhost:3000
+./deploy.sh production          # 生产 :3000（真实AI+支付，配置在 deploy/env/production.env）
+./deploy.sh staging             # 测试 :3001（类生产，支付沙箱）
+./deploy.sh demo --seed         # 演示 :3002（全mock + 演示账号，开箱即用）
+
+./deploy.sh <env> status|logs|down|seed|smoke    # 环境管理
 ```
 
-数据（数据库+图片）持久化在 `app-data` 卷中；详细说明（备份/升级/证书挂载）见 [docs/部署运维手册.md](docs/部署运维手册.md)。
+三套环境同机并行、数据卷隔离；`--smoke` 部署后自动跑7项冒烟验证。推送 GitHub 后 CI 自动跑测试（`.github/workflows/ci.yml`），打 `v*` 标签自动发布镜像到 GHCR（`release.yml`）。详见 [docs/部署运维手册.md](docs/部署运维手册.md)。
 
 ### 宿主机部署
 
