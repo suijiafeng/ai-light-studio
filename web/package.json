@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint": "eslint src --ext .js,.vue",
+    "lint:fix": "eslint src --ext .js,.vue --fix",
+    "format": "prettier --write \"src/**/*.{js,vue,json,css,scss}\""
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -23,10 +26,16 @@
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.48.0",
     "@vitejs/plugin-vue": "^5.1.4",
     "@vue/test-utils": "^2.4.6",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-vue": "^10.9.2",
     "jsdom": "^25.0.1",
+    "prettier": "^3.9.4",
     "sass": "^1.79.4",
     "vite": "^5.4.9",
     "vitest": "^2.1.2"

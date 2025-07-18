@@ -49,5 +49,9 @@ web/playwright-report/
 web/test-results/
 web/.playwright/
 
+# Linting and formatting
+.eslintcache
+*.stylelintcache
+
 # Playwright browser caches
 .playwright/
