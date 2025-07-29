@@ -167,7 +167,8 @@ for (const sql of [
   'ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0',
   'ALTER TABLE generations ADD COLUMN batch_id TEXT',
   'ALTER TABLE generations ADD COLUMN share_id TEXT',
-  'ALTER TABLE generations ADD COLUMN premium INTEGER DEFAULT 0'
+  'ALTER TABLE generations ADD COLUMN premium INTEGER DEFAULT 0',
+  'ALTER TABLE email_codes ADD COLUMN attempts INTEGER DEFAULT 0'
 ]) {
   try { db.exec(sql); } catch (e) { /* column exists */ }
 }

@@ -52,11 +52,23 @@ async function sendCode(email, purpose) {
   return { sent: false, devCode: code };
 }
 
+const MAX_VERIFY_ATTEMPTS = 5; // 单个验证码最多允许猜测次数，超过即作废，防暴力枚举
+
 function verifyCode(email, purpose, code) {
   const row = db.prepare(
     'SELECT * FROM email_codes WHERE email = ? AND purpose = ? AND used = 0 ORDER BY created_at DESC LIMIT 1'
   ).get(email, purpose);
-  if (!row || row.code !== String(code) || row.expires_at < Date.now()) return false;
+  if (!row || row.expires_at < Date.now()) return false;
+  if (row.code !== String(code)) {
+    // 错误尝试计数：达到上限即作废该码，攻击者无法在有效期内穷举 6 位空间
+    const attempts = (row.attempts || 0) + 1;
+    if (attempts >= MAX_VERIFY_ATTEMPTS) {
+      db.prepare('UPDATE email_codes SET used = 1 WHERE id = ?').run(row.id);
+    } else {
+      db.prepare('UPDATE email_codes SET attempts = ? WHERE id = ?').run(attempts, row.id);
+    }
+    return false;
+  }
   db.prepare('UPDATE email_codes SET used = 1 WHERE id = ?').run(row.id);
   return true;
 }

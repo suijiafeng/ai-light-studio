@@ -13,7 +13,8 @@ const router = express.Router();
 // 订单支付成功统一处理（幂等）
 const settleOrder = db.transaction((orderId, transactionId) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!order || order.status === 'paid') return order;
+  // 仅 pending 可结算：已 paid（幂等）、refunded/closed（不可复活）一律不再发放算力
+  if (!order || order.status !== 'pending') return order;
   db.prepare('UPDATE orders SET status = ?, transaction_id = ?, paid_at = ? WHERE id = ?')
     .run('paid', transactionId || '', Date.now(), orderId);
   changeCredits(order.user_id, order.credits, 'recharge', `充值「${order.title}」到账${order.credits}算力`);
@@ -41,22 +42,29 @@ const toPkg = r => ({
   priceYuan: (r.price / 100).toFixed(2)
 });
 
+// 会员折扣率（0<d<1 生效，其余一律按不打折）——防止配置缺失/异常算出 NaN 金额打挂下单
+function memberDiscountRate() {
+  const d = Number(config.memberDiscount);
+  return Number.isFinite(d) && d > 0 && d < 1 ? d : 1;
+}
+
 // 套餐列表
 router.get('/packages', (req, res) => {
   const rows = db.prepare('SELECT * FROM packages WHERE active = 1 ORDER BY sort ASC, rowid ASC').all();
   return ok(res, {
     packages: rows.map(toPkg),
-    memberDiscount: config.memberDiscount,
+    memberDiscount: memberDiscountRate(),
     payProvider: config.pay.provider
   });
 });
 
 // 会员购算力包享折扣价（单位分）
 function orderPrice(pkg, userId) {
-  if (pkg.type !== 'credits' || config.memberDiscount >= 1) return pkg.price;
+  const discount = memberDiscountRate();
+  if (pkg.type !== 'credits' || discount >= 1) return pkg.price;
   const u = db.prepare('SELECT member_expires_at FROM users WHERE id = ?').get(userId);
   const isMember = u?.member_expires_at && u.member_expires_at > Date.now();
-  return isMember ? Math.round(pkg.price * config.memberDiscount) : pkg.price;
+  return isMember ? Math.round(pkg.price * discount) : pkg.price;
 }
 
 // 创建充值订单
@@ -65,7 +73,7 @@ router.post('/order', auth, async (req, res) => {
   if (!row) return fail(res, 400, '套餐不存在或已下架');
   const pkg = toPkg(row);
   const amount = orderPrice(pkg, req.user.id);
-  const title = amount < pkg.price ? `${pkg.title}（会员${config.memberDiscount * 10}折）` : pkg.title;
+  const title = amount < pkg.price ? `${pkg.title}（会员${memberDiscountRate() * 10}折）` : pkg.title;
   const id = `O${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
   db.prepare('INSERT INTO orders (id, user_id, package_id, title, amount, credits, member_days, status, pay_method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .run(id, req.user.id, pkg.id, title, amount, pkg.credits, pkg.days || 0, 'pending', 'wechat', Date.now());
@@ -101,6 +109,7 @@ router.post('/mock/:id', auth, (req, res) => {
   const o = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!o) return fail(res, 404, '订单不存在');
   if (o.status === 'paid') return ok(res, toOrder(o), '订单已支付');
+  if (o.status !== 'pending') return fail(res, 400, '该订单已关闭或已退款，无法支付');
   const settled = settleOrder(o.id, `MOCK${Date.now()}`);
   return ok(res, toOrder(settled), '模拟支付成功');
 });

@@ -22,5 +22,6 @@ process.env.COST_PER_GENERATION = '5';
 process.env.DAILY_CREDITS = '5';
 process.env.MULTI_COST = '8';
 process.env.INVITE_BONUS = '10';
-process.env.ADMIN_EMAILS = 'admin@test.com';
+process.env.ADMIN_EMAILS = 'admin@test.com'
+process.env.SUPER_ADMIN_EMAILS = 'super@test.com';
 process.env.EMAIL_VERIFY = 'off';

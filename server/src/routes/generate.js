@@ -18,14 +18,16 @@ const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: 
 (() => {
   const stale = db.prepare("SELECT id, user_id, cost FROM generations WHERE status = 'processing'").all();
   if (!stale.length) return;
-  db.transaction(() => {
-    const mark = db.prepare("UPDATE generations SET status = 'failed', error = '服务重启导致任务中断', finished_at = ? WHERE id = ?");
-    for (const g of stale) {
-      mark.run(Date.now(), g.id);
-      if (g.cost > 0) changeCredits(g.user_id, g.cost, 'refund', '任务中断退还算力');
+  const mark = db.prepare("UPDATE generations SET status = 'failed', error = '服务重启导致任务中断', finished_at = ? WHERE id = ?");
+  let refunded = 0;
+  for (const g of stale) {
+    mark.run(Date.now(), g.id);
+    // 逐条退款：用户可能已注销（changeCredits 会抛"用户不存在"），单条失败不影响其余
+    if (g.cost > 0) {
+      try { changeCredits(g.user_id, g.cost, 'refund', '任务中断退还算力'); refunded++; } catch (e) { /* 用户已不存在，跳过 */ }
     }
-  })();
-  console.log(`ℹ️  已清理 ${stale.length} 个中断的生成任务并退还算力`);
+  }
+  console.log(`ℹ️  已清理 ${stale.length} 个中断的生成任务，退还 ${refunded} 笔算力`);
 })();
 
 // ---------- 轻量并发队列：限制同时出图数，防止批量任务打满 CPU/外部 API ----------
@@ -169,7 +171,8 @@ function startJob({ userId, sourcePath, params, cost, premium, batchId = null })
     .catch(err => {
       db.prepare('UPDATE generations SET status = ?, error = ?, finished_at = ? WHERE id = ?')
         .run('failed', err.message || 'AI生成失败', Date.now(), id);
-      changeCredits(userId, cost, 'refund', '生成失败退还算力'); // 失败自动退还
+      // 失败自动退还；用户可能在出图期间已注销，退款失败不得让未捕获异常打挂进程
+      try { changeCredits(userId, cost, 'refund', '生成失败退还算力'); } catch (e) { /* 用户已不存在，忽略 */ }
     });
   return id;
 }

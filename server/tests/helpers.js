@@ -6,7 +6,12 @@ export { app }
 
 /** 注册并返回 { token, user } */
 export async function register(email, password = 'test123456', extra = {}) {
-  const res = await request(app).post('/api/auth/register').send({ email, password, ...extra })
+  let res = await request(app).post('/api/auth/register').send({ email, password, ...extra })
+  // 特权邮箱（admin/super）注册强制需邮箱验证码；测试环境未配SMTP会随接口返回 devCode，取码后重试
+  if (res.body.code !== 200 && /验证码/.test(res.body.msg || '') && !extra.code) {
+    const sc = await request(app).post('/api/auth/send-code').send({ email, purpose: 'register' })
+    res = await request(app).post('/api/auth/register').send({ email, password, code: sc.body.data?.devCode, ...extra })
+  }
   if (res.body.code !== 200) throw new Error(`注册失败: ${res.body.msg}`)
   return res.body.data
 }

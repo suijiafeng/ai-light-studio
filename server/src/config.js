@@ -12,6 +12,8 @@ module.exports = {
   uploadDir: resolve(process.env.UPLOAD_DIR, './data/uploads'),
   resultDir: resolve(process.env.RESULT_DIR, './data/results'),
   adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+  // 超级管理员：唯一最高权限，可授权/封禁/删除管理员
+  superAdminEmails: (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
 
   freeCredits: Number(process.env.FREE_CREDITS || 20),
   costPerGeneration: Number(process.env.COST_PER_GENERATION || 5),
@@ -19,6 +21,7 @@ module.exports = {
   multiCost: Number(process.env.MULTI_COST || 8),
   inviteBonus: Number(process.env.INVITE_BONUS || 10),
   bulkLimit: Number(process.env.BULK_LIMIT || 20),
+  memberDiscount: Number(process.env.MEMBER_DISCOUNT || 0.9), // 会员购算力包折扣（1为不打折）
   freeMaxSize: Number(process.env.FREE_MAX_SIZE || 1024),
   premiumMaxSize: Number(process.env.PREMIUM_MAX_SIZE || 2048),
   watermarkText: process.env.WATERMARK_TEXT || '代码工匠AI灯光设计',

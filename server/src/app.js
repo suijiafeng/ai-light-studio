@@ -48,18 +48,24 @@ const distDir = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
 
+  // HTML属性转义：昵称等用户可控内容注入OG标签前必须转义，防存储型XSS（"><script>…）
+  const escapeHtml = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
   // 分享页注入OG标签（微信/QQ/微博分享显示卡片预览）
   app.get('/s/:shareId', (req, res) => {
     let html = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
     const g = db.prepare('SELECT * FROM generations WHERE share_id = ?').get(req.params.shareId);
     if (g && g.status === 'success') {
       const u = db.prepare('SELECT nickname FROM users WHERE id = ?').get(g.user_id);
-      const base = `${req.protocol}://${req.get('host')}`;
+      const base = escapeHtml(`${req.protocol}://${req.get('host')}`);
+      const title = escapeHtml(`${u?.nickname || '设计师'}的AI灯光设计作品`);
       const og = [
-        `<meta property="og:title" content="${(u?.nickname || '设计师')}的AI灯光设计作品" />`,
+        `<meta property="og:title" content="${title}" />`,
         `<meta property="og:description" content="上传照片，AI一键重绘空间灯光效果，注册即送免费算力" />`,
-        `<meta property="og:image" content="${base}/results/${g.result_path}" />`,
-        `<meta property="og:url" content="${base}/s/${req.params.shareId}" />`,
+        `<meta property="og:image" content="${base}/results/${escapeHtml(g.result_path)}" />`,
+        `<meta property="og:url" content="${base}/s/${escapeHtml(req.params.shareId)}" />`,
         `<meta property="og:type" content="website" />`
       ].join('\n  ');
       html = html.replace('</head>', `  ${og}\n</head>`);

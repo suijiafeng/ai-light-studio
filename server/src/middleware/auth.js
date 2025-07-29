@@ -35,8 +35,13 @@ function auth(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') return fail(res, 403, '权限不足');
+  if (!req.user || !['admin', 'super'].includes(req.user.role)) return fail(res, 403, '权限不足');
   next();
 }
 
-module.exports = { auth, adminOnly };
+function superOnly(req, res, next) {
+  if (!req.user || req.user.role !== 'super') return fail(res, 403, '仅超级管理员可执行此操作');
+  next();
+}
+
+module.exports = { auth, adminOnly, superOnly };

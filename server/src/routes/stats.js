@@ -2,10 +2,23 @@ const express = require('express');
 const db = require('../db');
 const config = require('../config');
 const { ok, fail } = require('../utils/response');
-const { auth, adminOnly } = require('../middleware/auth');
+const { auth, adminOnly, superOnly } = require('../middleware/auth');
 const { changeCredits } = require('../services/credits');
 
 const router = express.Router();
+
+/**
+ * 操作目标校验：
+ * - 任何人不可操作超级管理员
+ * - 管理员之间不可互相操作（封禁/调整算力/删除），仅超管可操作管理员
+ */
+function canOperate(operator, target) {
+  if (target.role === 'super') return { ok: false, msg: '不可操作超级管理员账号' };
+  if (['admin'].includes(target.role) && operator.role !== 'super') {
+    return { ok: false, msg: '管理员之间不可互相操作，请联系超级管理员' };
+  }
+  return { ok: true };
+}
 
 // ---------- AI出图模式切换（仅管理员，运行时生效无需重启） ----------
 const settings = require('../services/settings');
@@ -31,6 +44,43 @@ router.post('/ai-mode', auth, adminOnly, (req, res) => {
   }
   settings.set('ai_provider', provider);
   return ok(res, { provider }, provider === 'mock' ? '已切换为演示模式（本地模拟出图）' : `已切换为真实出图（${provider}）`);
+});
+
+// ---------- 管理员账号管理（仅超级管理员） ----------
+// 授权/撤销管理员
+router.post('/users/:id/role', auth, superOnly, (req, res) => {
+  const { role } = req.body || {};
+  if (!['admin', 'user'].includes(role)) return fail(res, 400, '角色仅支持 admin / user');
+  const u = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
+  if (!u) return fail(res, 404, '用户不存在');
+  if (u.role === 'super') return fail(res, 403, '不可变更超级管理员角色');
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, u.id);
+  return ok(res, { role }, role === 'admin' ? '已授权为管理员' : '已撤销管理员权限');
+});
+
+// 删除账号（含管理员；不可删超管）
+router.delete('/users/:id', auth, superOnly, (req, res) => {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!u) return fail(res, 404, '用户不存在');
+  if (u.role === 'super') return fail(res, 403, '不可删除超级管理员账号');
+  const fs = require('fs');
+  const path = require('path');
+  const config = require('../config');
+  const gens = db.prepare('SELECT source_path, result_path FROM generations WHERE user_id = ?').all(u.id);
+  for (const g of gens) {
+    for (const [dir, name] of [[config.resultDir, g.result_path], [config.uploadDir, g.source_path]]) {
+      if (name) { const p = path.join(dir, name); if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) {} } }
+    }
+  }
+  const wipe = db.transaction(() => {
+    db.prepare('DELETE FROM generations WHERE user_id = ?').run(u.id);
+    db.prepare('DELETE FROM credit_logs WHERE user_id = ?').run(u.id);
+    db.prepare('DELETE FROM orders WHERE user_id = ?').run(u.id);
+    db.prepare('DELETE FROM api_keys WHERE user_id = ?').run(u.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+  });
+  wipe();
+  return ok(res, {}, '账号已删除');
 });
 
 // ---------- 订单管理（仅管理员） ----------
@@ -105,8 +155,10 @@ router.post('/users/:id/credits', auth, adminOnly, (req, res) => {
   const { change, remark } = req.body || {};
   const n = Number(change);
   if (!Number.isFinite(n) || n === 0) return fail(res, 400, '请输入非零的调整数值');
-  const u = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  const u = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
   if (!u) return fail(res, 404, '用户不存在');
+  const perm = canOperate(req.user, u);
+  if (!perm.ok) return fail(res, 403, perm.msg);
   try {
     const balance = changeCredits(u.id, n, n > 0 ? 'recharge' : 'consume', remark || `管理员调整${n}算力`);
     return ok(res, { balance }, '调整成功');
@@ -120,7 +172,8 @@ router.post('/users/:id/credits', auth, adminOnly, (req, res) => {
 router.post('/users/:id/ban', auth, adminOnly, (req, res) => {
   const u = db.prepare('SELECT id, banned, role FROM users WHERE id = ?').get(req.params.id);
   if (!u) return fail(res, 404, '用户不存在');
-  if (u.role === 'admin') return fail(res, 400, '不能封禁管理员');
+  const perm = canOperate(req.user, u);
+  if (!perm.ok) return fail(res, 403, perm.msg);
   const banned = req.body?.banned ? 1 : 0;
   db.prepare('UPDATE users SET banned = ? WHERE id = ?').run(banned, u.id);
   return ok(res, { banned: !!banned }, banned ? '已封禁' : '已解封');
