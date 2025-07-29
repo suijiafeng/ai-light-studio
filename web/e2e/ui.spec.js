@@ -6,12 +6,24 @@ import { test, expect } from '@playwright/test'
 const closeToasts = page => page.evaluate(() => document.querySelectorAll('.el-message').forEach(e => e.remove()))
 
 async function registerUser(page, email) {
+  const pwd = 'e2epass123'
+  const base = 'http://localhost:3000'
+  // 账号准备走API（管理员邮箱注册需验证码，此处自动取devCode），避免UI注册受管理员邮箱限制
+  const reg = await page.request.post(base + '/api/auth/register', { data: { email, password: pwd } })
+  if (reg.status() !== 200) {
+    const body = await reg.json().catch(() => ({}))
+    if (/验证码/.test(body.msg || '')) {
+      const sc = await page.request.post(base + '/api/auth/send-code', { data: { email, purpose: 'register' } })
+      const code = (await sc.json()).data?.devCode
+      await page.request.post(base + '/api/auth/register', { data: { email, password: pwd, code } })
+    }
+    // 已注册等其余情况：忽略，直接登录
+  }
+  // UI 登录（验证登录交互本身）
   await page.goto('/login')
-  await page.getByText('免费注册').click()
   await page.getByPlaceholder('请输入邮箱').fill(email)
-  await page.getByPlaceholder('至少6位密码').fill('e2epass123')
-  await page.locator('.agree .el-checkbox__label').click()
-  await page.getByRole('button', { name: '注 册', exact: true }).click()
+  await page.getByPlaceholder('8-32位，含字母和数字').fill(pwd)
+  await page.getByRole('button', { name: '登 录', exact: true }).click()
   await page.waitForURL(/\/studio/)
   await closeToasts(page)
 }
@@ -27,9 +39,14 @@ test('双主题切换全局生效且持久化', async ({ page }) => {
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
 
-test('未登录访问受保护页自动跳登录并回跳', async ({ page }) => {
+test('未登录访问受保护页自动跳登录，出现提示与抖动动画', async ({ page }) => {
   await page.goto('/history')
   await expect(page).toHaveURL(/\/login\?redirect=/)
+  // 抖动class是稳定信号（toast会自动消失，不作强断言）
+  await expect(page.locator('.login-card.shake')).toBeVisible()
+  // 已在登录页时点击其他受保护菜单，同样触发（URL变化即证明守卫生效）
+  await page.getByRole('link', { name: '充值中心' }).click()
+  await expect(page).toHaveURL(/redirect=(%2F|\/)recharge/)
 })
 
 test('首页模板卡片一键套用参数直达工作台', async ({ page }) => {

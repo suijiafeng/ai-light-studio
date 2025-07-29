@@ -31,10 +31,10 @@
         <h4>修改密码</h4>
         <el-form label-position="top">
           <el-form-item label="原密码">
-            <el-input v-model="pwd.oldPassword" type="password" show-password placeholder="原密码" />
+            <el-input v-model="pwd.oldPassword" type="password" show-password placeholder="原密码" maxlength="32" />
           </el-form-item>
           <el-form-item label="新密码">
-            <el-input v-model="pwd.newPassword" type="password" show-password placeholder="新密码（至少6位）" />
+            <el-input v-model="pwd.newPassword" type="password" show-password placeholder="新密码（8-32位，含字母和数字）" maxlength="32" />
           </el-form-item>
           <el-button type="primary" plain :loading="savingPwd" @click="savePassword">修改密码</el-button>
         </el-form>
@@ -86,6 +86,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { isValidPassword, PASSWORD_RULE_MSG } from '@/utils/password'
 import { apiUpdateProfile, apiKeys, apiCreateKey, apiRevokeKey, apiDeleteAccount } from '@/api'
 import { useUserStore } from '@/stores/user'
 
@@ -167,7 +168,7 @@ const saveNickname = async () => {
 
 const savePassword = async () => {
   if (!pwd.oldPassword || !pwd.newPassword) return ElMessage.warning('请填写完整')
-  if (pwd.newPassword.length < 6) return ElMessage.warning('新密码至少6位')
+  if (!isValidPassword(pwd.newPassword)) return ElMessage.warning(PASSWORD_RULE_MSG)
   savingPwd.value = true
   try {
     await apiUpdateProfile({ ...pwd })

@@ -19,11 +19,16 @@ test('注册→出图→图库对比→充值 全链路', async ({ page }) => {
   await page.getByRole('button', { name: '登录 / 注册' }).click()
   await page.getByText('免费注册').click()
   await page.getByPlaceholder('请输入邮箱').fill(email)
-  await page.getByPlaceholder('至少6位密码').fill(password)
-  await page.locator('.agree .el-checkbox__label').click()
+  await page.getByPlaceholder('8-32位，含字母和数字').fill(password)
+  await page.getByPlaceholder('再次输入密码').fill(password)
+  await page.locator('.agree .el-checkbox__inner').click()
   await page.getByRole('button', { name: '注 册', exact: true }).click()
+  // 注册成功自动切回登录（邮箱已预填），输入密码登录
+  await expect(page.getByText('欢迎回来')).toBeVisible()
+  await page.getByPlaceholder('8-32位，含字母和数字').fill(password)
+  await page.getByRole('button', { name: '登 录', exact: true }).click()
 
-  // 注册成功进入工作台，头部显示算力
+  // 登录成功进入工作台，头部显示算力
   await expect(page).toHaveURL(/\/studio/)
   await expect(page.locator('.credits-tag')).toContainText('算力')
 

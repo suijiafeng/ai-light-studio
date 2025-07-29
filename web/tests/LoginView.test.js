@@ -38,7 +38,8 @@ describe('登录注册页', () => {
 
     const inputs = w.findAll('input')
     await inputs.find(i => i.attributes('placeholder')?.includes('邮箱')).setValue('a@b.com')
-    await inputs.find(i => i.attributes('placeholder')?.includes('密码')).setValue('pass123456')
+    await inputs.find(i => i.attributes('placeholder') === '8-32位，含字母和数字').setValue('pass123456')
+    await inputs.find(i => i.attributes('placeholder') === '再次输入密码').setValue('pass123456')
 
     const submitBtn = w.findAll('button').find(b => b.text().includes('注'))
     await submitBtn.trigger('click')
@@ -49,14 +50,15 @@ describe('登录注册页', () => {
     w.unmount()
   })
 
-  it('勾选协议后注册成功并跳转', async () => {
+  it('勾选协议后注册成功，自动切回登录并保留邮箱', async () => {
     const w = mountView(LoginView)
     await w.findAll('a, .el-link').find(l => l.text().includes('免费注册')).trigger('click')
     await nextTick()
 
     const inputs = w.findAll('input')
     await inputs.find(i => i.attributes('placeholder')?.includes('邮箱')).setValue('a@b.com')
-    await inputs.find(i => i.attributes('placeholder')?.includes('密码')).setValue('pass123456')
+    await inputs.find(i => i.attributes('placeholder') === '8-32位，含字母和数字').setValue('pass123456')
+    await inputs.find(i => i.attributes('placeholder') === '再次输入密码').setValue('pass123456')
     await w.find('input[type="checkbox"]').setValue(true)
 
     const submitBtn = w.findAll('button').find(b => b.text().includes('注'))
@@ -64,7 +66,10 @@ describe('登录注册页', () => {
     await flush(); await nextTick(); await flush()
 
     expect(apiRegister).toHaveBeenCalled()
-    expect(pushMock).toHaveBeenCalled()
+    expect(pushMock).not.toHaveBeenCalled() // 不自动登录跳转
+    expect(w.text()).toContain('欢迎回来')   // 已切回登录态
+    const emailInput = w.findAll('input').find(i => i.attributes('placeholder')?.includes('邮箱'))
+    expect(emailInput.element.value).toBe('a@b.com') // 邮箱预填保留
     w.unmount()
   })
 })
