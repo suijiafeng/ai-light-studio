@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "lint": "eslint src tests --ext .js",
     "lint:fix": "eslint src tests --ext .js --fix",
-    "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\""
+    "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\"",
+    "init-admin": "node scripts/init-admin.js"
   },
   "engines": {
     "node": ">=18"
