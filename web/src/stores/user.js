@@ -5,12 +5,14 @@ import { apiLogin, apiRegister, apiMe } from '@/api'
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    user: null
+    // 本地快照即时水合，避免刷新时头部登录态闪变；fetchMe 会后台刷新为最新
+    user: JSON.parse(localStorage.getItem('user_snapshot') || 'null')
   }),
   getters: {
     isLogin: s => !!s.token,
     credits: s => s.user?.credits ?? 0,
-    isAdmin: s => s.user?.role === 'admin',
+    isAdmin: s => ['admin', 'super'].includes(s.user?.role),
+    isSuper: s => s.user?.role === 'super',
     isMember: s => !!s.user?.isMember
   },
   actions: {
@@ -18,6 +20,7 @@ export const useUserStore = defineStore('user', {
       this.token = token
       this.user = user
       localStorage.setItem('token', token)
+      localStorage.setItem('user_snapshot', JSON.stringify(user))
     },
     notifyDaily(dailyBonus) {
       if (dailyBonus > 0) ElMessage.success(`每日登录奖励 +${dailyBonus} 算力已到账！`)
@@ -35,6 +38,7 @@ export const useUserStore = defineStore('user', {
       try {
         const { user, dailyBonus } = await apiMe()
         this.user = user
+        localStorage.setItem('user_snapshot', JSON.stringify(user))
         this.notifyDaily(dailyBonus)
       } catch (e) {
         if (e.code === 401) this.logout()
@@ -44,6 +48,7 @@ export const useUserStore = defineStore('user', {
       this.token = ''
       this.user = null
       localStorage.removeItem('token')
+      localStorage.removeItem('user_snapshot')
     }
   }
 })

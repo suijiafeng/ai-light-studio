@@ -10,7 +10,7 @@
         <div class="mk-card mode-card">
           <span class="mode-label">AI出图模式</span>
           <el-radio-group :model-value="aiMode" @change="switchAiMode">
-            <el-radio-button value="mock">演示模式（本地模拟）</el-radio-button>
+            <el-radio-button value="mock">演示模式</el-radio-button>
             <el-radio-button value="fal" :disabled="!aiAvailable.fal">真实出图 · fal</el-radio-button>
             <el-radio-button value="replicate" :disabled="!aiAvailable.replicate">Replicate</el-radio-button>
           </el-radio-group>
@@ -45,25 +45,15 @@
 
       <div v-if="data.funnel" class="mk-card funnel">
         <h4>转化漏斗</h4>
-        <div class="funnel-row">
-          <div class="funnel-step">
-            <div class="fv">{{ data.funnel.registered }}</div>
-            <div class="fl text-secondary">注册用户</div>
-          </div>
-          <div class="funnel-arrow text-secondary">→ {{ data.funnel.generatedRate }}%</div>
-          <div class="funnel-step">
-            <div class="fv">{{ data.funnel.generated }}</div>
-            <div class="fl text-secondary">出过图</div>
-          </div>
-          <div class="funnel-arrow text-secondary">→</div>
-          <div class="funnel-step">
-            <div class="fv">{{ data.funnel.exhausted }}</div>
-            <div class="fl text-secondary">算力耗尽</div>
-          </div>
-          <div class="funnel-arrow text-secondary">→ {{ data.funnel.paidRate }}%</div>
-          <div class="funnel-step">
-            <div class="fv mk-gradient-text">{{ data.funnel.paid }}</div>
-            <div class="fl text-secondary">付费用户</div>
+        <div class="funnel-bars">
+          <div v-for="(st, i) in funnelStages" :key="st.label" class="fb-row">
+            <span class="fb-label text-secondary">{{ st.label }}</span>
+            <div class="fb-track">
+              <div class="fb-bar" :class="'fb-' + i" :style="{ width: funnelWidth(st.value) }">
+                <b>{{ st.value }}</b>
+              </div>
+            </div>
+            <span class="fb-rate text-secondary">{{ st.rate }}</span>
           </div>
         </div>
         <p class="text-secondary funnel-tip">注册→出图 {{ data.funnel.generatedRate }}% · 注册→付费 {{ data.funnel.paidRate }}%（算力耗尽=余额不足单次生成，是充值转化的关键人群）</p>
@@ -71,11 +61,7 @@
 
       <div class="mk-card trend">
         <h4>近7天趋势</h4>
-        <el-table :data="data.trend" size="small">
-          <el-table-column prop="date" label="日期" />
-          <el-table-column prop="generations" label="生成次数" />
-          <el-table-column prop="newUsers" label="新增用户" />
-        </el-table>
+        <TrendChart :data="data.trend" />
       </div>
     </template>
     <el-skeleton v-else :rows="6" animated />
@@ -89,12 +75,13 @@
             <el-button type="primary" plain @click="loadUsers">搜索</el-button>
           </div>
           <el-table :data="users" v-loading="loadingUsers" size="small">
-            <el-table-column prop="email" label="邮箱" min-width="180" />
-            <el-table-column prop="nickname" label="昵称" width="110" />
-            <el-table-column prop="credits" label="算力" width="80" />
-            <el-table-column label="身份" width="110">
+            <el-table-column prop="email" label="邮箱" min-width="150" />
+            <el-table-column prop="nickname" label="昵称" width="150" />
+            <el-table-column prop="credits" label="算力" width="100" />
+            <el-table-column label="身份" width="120">
               <template #default="{ row }">
-                <el-tag v-if="row.role === 'admin'" size="small" type="danger">管理员</el-tag>
+                <el-tag v-if="row.role === 'super'" size="small" type="danger" effect="dark">超级管理员</el-tag>
+                <el-tag v-else-if="row.role === 'admin'" size="small" type="danger">管理员</el-tag>
                 <el-tag v-else-if="row.isMember" size="small" type="warning">会员</el-tag>
                 <el-tag v-else size="small" type="info">普通</el-tag>
                 <el-tag v-if="row.banned" size="small" type="danger" style="margin-left:4px">封禁</el-tag>
@@ -103,12 +90,31 @@
             <el-table-column label="注册时间" width="120">
               <template #default="{ row }">{{ new Date(row.createdAt).toLocaleDateString('zh-CN') }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="180">
+            <el-table-column label="操作" width="270">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="adjust(row)">调整算力</el-button>
-                <el-button v-if="row.role !== 'admin'" size="small" text :type="row.banned ? 'success' : 'danger'" @click="toggleBan(row)">
-                  {{ row.banned ? '解封' : '封禁' }}
-                </el-button>
+                <template v-if="canOperate(row)">
+                  <el-button size="small" text type="primary" @click="adjust(row)">调整算力</el-button>
+                  <template v-if="userStore.isSuper">
+                    <el-button v-if="row.role === 'user'" size="small" text type="warning" @click="setRole(row, 'admin')">授权管理员</el-button>
+                    <el-button v-else-if="row.role === 'admin'" size="small" text type="warning" @click="setRole(row, 'user')">撤销管理员</el-button>
+                  </template>
+                  <el-dropdown trigger="click" @command="cmd => onUserMore(cmd, row)">
+                    <el-button size="small" text><el-icon><MoreFilled /></el-icon>更多</el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="ban">
+                          <span :style="{ color: row.banned ? '#67c23a' : '#e6a23c' }">{{ row.banned ? '解封账号' : '封禁账号' }}</span>
+                        </el-dropdown-item>
+                        <el-dropdown-item v-if="userStore.isSuper" command="delete" divided>
+                          <span style="color:#f56c6c">删除账号</span>
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
+                <span v-else class="text-secondary" style="font-size:12px">
+                  {{ row.role === 'super' ? '—' : '需超管操作' }}
+                </span>
               </template>
             </el-table-column>
           </el-table>
@@ -255,11 +261,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiStatsOverview, apiAdminUsers, apiAdminAdjustCredits, apiAdminBan, apiAdminGenerations, apiAdminErrors, apiAdminRefund, apiAdminOrders, apiAdminDeleteGeneration, apiAiMode, apiSetAiMode, apiAdminPackages, apiAdminCreatePackage, apiAdminUpdatePackage, apiAdminTogglePackage } from '@/api'
+import { apiStatsOverview, apiAdminUsers, apiAdminAdjustCredits, apiAdminBan, apiAdminGenerations, apiAdminErrors, apiAdminRefund, apiAdminOrders, apiAdminDeleteGeneration, apiAiMode, apiSetAiMode, apiAdminSetRole, apiAdminDeleteUser, apiAdminPackages, apiAdminCreatePackage, apiAdminUpdatePackage, apiAdminTogglePackage } from '@/api'
+
+import { useUserStore } from '@/stores/user'
+import TrendChart from '@/components/TrendChart.vue'
+const userStore = useUserStore()
+
+// 操作矩阵：不可操作超管；管理员之间不可互相操作（与后端一致）
+const canOperate = row => {
+  if (row.role === 'super') return false
+  if (row.role === 'admin' && !userStore.isSuper) return false
+  return true
+}
+
+const setRole = async (row, role) => {
+  try {
+    await ElMessageBox.confirm(
+      role === 'admin' ? `确认授权 ${row.email} 为管理员？` : `确认撤销 ${row.email} 的管理员权限？`,
+      '角色变更', { type: 'warning' })
+    await apiAdminSetRole(row.id, role)
+    ElMessage.success('已变更')
+    loadUsers()
+  } catch (e) { if (e !== 'cancel' && e?.message && e?.code !== -1) ElMessage.error(e.message) }
+}
+
+const onUserMore = (cmd, row) => {
+  if (cmd === 'ban') toggleBan(row)
+  else if (cmd === 'delete') removeUser(row)
+}
+
+const removeUser = async row => {
+  try {
+    await ElMessageBox.confirm(`确认删除账号 ${row.email}？其全部数据（图片/订单/记录）将被永久删除。`, '删除账号', { type: 'error', confirmButtonText: '确认删除' })
+    await apiAdminDeleteUser(row.id)
+    ElMessage.success('已删除')
+    loadUsers()
+  } catch (e) { if (e !== 'cancel' && e?.message && e?.code !== -1) ElMessage.error(e.message) }
+}
 
 const data = ref(null)
+
+// 漏斗可视化数据
+const funnelStages = computed(() => {
+  const f = data.value?.funnel
+  if (!f) return []
+  return [
+    { label: '注册用户', value: f.registered, rate: '100%' },
+    { label: '出过图', value: f.generated, rate: (f.generatedRate ?? 0) + '%' },
+    { label: '算力耗尽', value: f.exhausted, rate: f.registered ? Math.round(f.exhausted / f.registered * 100) + '%' : '0%' },
+    { label: '付费用户', value: f.paid, rate: (f.paidRate ?? 0) + '%' }
+  ]
+})
+const funnelWidth = v => {
+  const max = data.value?.funnel?.registered || 1
+  return Math.max(6, Math.round(v / max * 100)) + '%'
+}
 const forbidden = ref(false)
 const tab = ref('overview')
 
@@ -452,6 +510,22 @@ const toggleBan = async row => {
   .funnel-tip { font-size: 12px; margin: 12px 0 0; }
 }
 .pkg-tip { font-size: 12px; align-self: center; }
+.funnel-bars {
+  display: flex; flex-direction: column; gap: 10px; margin-top: 4px;
+  .fb-row { display: flex; align-items: center; gap: 12px; }
+  .fb-label { width: 64px; font-size: 12px; text-align: right; flex-shrink: 0; }
+  .fb-track { flex: 1; background: rgba(124, 108, 255, 0.08); border-radius: 8px; overflow: hidden; }
+  .fb-bar {
+    height: 30px; border-radius: 8px; display: flex; align-items: center;
+    padding: 0 10px; color: #fff; font-size: 13px; min-width: 34px;
+    transition: width 0.5s ease;
+  }
+  .fb-0 { background: linear-gradient(90deg, #7c6cff, #8f80ff); }
+  .fb-1 { background: linear-gradient(90deg, #6f7bff, #4dd0e1); }
+  .fb-2 { background: linear-gradient(90deg, #4dd0e1, #43b3c4); }
+  .fb-3 { background: linear-gradient(90deg, #f0a24d, #e6754d); }
+  .fb-rate { width: 48px; font-size: 12px; flex-shrink: 0; }
+}
 .search-row { display: flex; gap: 10px; margin-bottom: 14px; }
 .mode-card {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;

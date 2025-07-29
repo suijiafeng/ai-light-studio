@@ -26,6 +26,19 @@ html.dark {
 
 * { box-sizing: border-box; }
 
+/* 首屏与主题切换期间禁用过渡动画：刷新不闪、切换主题所有颜色同步变化 */
+html.boot-lock *, html.boot-lock *::before, html.boot-lock *::after,
+html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* 滚动条常驻占位，避免页面高度变化时内容左右抖动 */
+html { scrollbar-gutter: stable; }
+
+/* el-tag 不参与任何过渡（刷新/主题切换时不闪动） */
+.el-tag { transition: none !important; }
+
 html, body, #app {
   height: 100%;
   margin: 0;
@@ -92,6 +105,11 @@ html.dark body {
 }
 
 .text-secondary { color: var(--mk-text-2); }
+
+.more-icon {
+  color: var(--mk-text-2);
+  transform: rotate(90deg);
+}
 
 /* 文本截断工具类 */
 .ellipsis {

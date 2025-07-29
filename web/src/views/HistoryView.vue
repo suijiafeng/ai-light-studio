@@ -47,31 +47,30 @@
           <span class="text-secondary cost">消耗{{ item.cost }}算力</span>
         </div>
         <div class="ops">
-          <el-tooltip content="下载" placement="top">
-            <el-button size="small" text type="primary" :disabled="!item.resultUrl" @click="download(item)">
-              <el-icon><Download /></el-icon>
+          <el-button size="small" text type="primary" :disabled="!item.resultUrl" @click="download(item)">
+            <el-icon><Download /></el-icon>下载
+          </el-button>
+          <el-button size="small" text type="primary" @click="reEdit(item)">
+            <el-icon><EditPen /></el-icon>编辑
+          </el-button>
+          <el-dropdown trigger="click" @command="cmd => onMore(cmd, item)">
+            <el-button size="small" text>
+              <el-icon class="more-icon"><MoreFilled /></el-icon>
             </el-button>
-          </el-tooltip>
-          <el-tooltip content="再次编辑" placement="top">
-            <el-button size="small" text type="primary" @click="reEdit(item)">
-              <el-icon><EditPen /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="方案报告" placement="top">
-            <el-button size="small" text type="primary" :disabled="item.status !== 'success'" @click="$router.push(`/report/${item.id}`)">
-              <el-icon><Document /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="分享" placement="top">
-            <el-button size="small" text type="primary" :disabled="item.status !== 'success'" @click="share(item)">
-              <el-icon><Share /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="删除" placement="top">
-            <el-button size="small" text type="danger" @click="remove(item)">
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </el-tooltip>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="report" :disabled="item.status !== 'success'">
+                  <el-icon><Document /></el-icon>方案
+                </el-dropdown-item>
+                <el-dropdown-item command="share" :disabled="item.status !== 'success'">
+                  <el-icon><Share /></el-icon>分享
+                </el-dropdown-item>
+                <el-dropdown-item command="delete" divided>
+                  <el-icon><Delete /></el-icon><span style="color:#f56c6c">删除</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
     </div>
@@ -196,6 +195,12 @@ const openView = item => {
   viewVisible.value = true
 }
 
+const onMore = (cmd, item) => {
+  if (cmd === 'report') router.push(`/report/${item.id}`)
+  else if (cmd === 'share') share(item)
+  else if (cmd === 'delete') remove(item)
+}
+
 const share = async item => {
   try {
     const { shareId } = await apiShare(item.id)
@@ -243,8 +248,9 @@ const remove = async item => {
     .cost { flex-shrink: 0; }
   }
   .ops {
-    display: flex; justify-content: space-around;
-    .el-button { margin: 0; padding: 6px; }
+    display: flex; justify-content: flex-end; align-items: center;
+
+    .el-button { margin: 0; padding: 6px 8px; color:#7f7f7f;}
   }
 }
 .pager { display: flex; justify-content: center; margin-top: 26px; }
