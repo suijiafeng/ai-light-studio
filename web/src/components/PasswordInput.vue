@@ -34,8 +34,6 @@ defineProps({
   maxlength: { type: [String, Number], default: 32 }
 })
 defineEmits(['update:modelValue', 'enter'])
-
-// 安全策略：仅在按住眼睛图标时显示明文，松开立即隐藏
 const show = ref(false)
 </script>
 

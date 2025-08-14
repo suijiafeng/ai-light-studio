@@ -6,14 +6,8 @@ for (const dir of [path.dirname(config.dbPath), config.uploadDir, config.resultD
   fs.mkdirSync(dir, { recursive: true });
 }
 
-/**
- * 数据库驱动：优先使用 better-sqlite3（性能最佳）；
- * 若当前环境无法编译原生模块，则自动降级为 Node 内置 node:sqlite（Node >= 22.13），
- * 并补齐 pragma / transaction 接口，二者API完全兼容，业务代码零改动。
- */
 let db;
-// WAL 提升并发性能；个别文件系统不支持时自动忽略
-const tryWal = fn => { try { fn(); } catch (e) { /* ignore */ } };
+const tryWal = fn => { try { fn(); } catch (e) {  } };
 try {
   const Database = require('better-sqlite3');
   db = new Database(config.dbPath);
@@ -23,7 +17,6 @@ try {
   db = new DatabaseSync(config.dbPath);
   tryWal(() => db.exec('PRAGMA journal_mode = WAL'));
   db.pragma = s => db.exec(`PRAGMA ${s}`);
-  // 支持嵌套事务（savepoint），与 better-sqlite3 行为对齐
   let txDepth = 0;
   db.transaction = fn => (...args) => {
     const sp = `sp_${txDepth}`;
@@ -138,8 +131,6 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT
 );
 `);
-
-// 节点工作流画布（M1：仅定义存储，执行引擎见后续里程碑）
 db.exec(`
 CREATE TABLE IF NOT EXISTS workflows (
   id TEXT PRIMARY KEY,
@@ -155,8 +146,6 @@ CREATE TABLE IF NOT EXISTS workflows (
 CREATE INDEX IF NOT EXISTS idx_wf_user ON workflows(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_wf_share ON workflows(share_id);
 `);
-
-// 工作流运行记录（M2：执行引擎）
 db.exec(`
 CREATE TABLE IF NOT EXISTS workflow_runs (
   id TEXT PRIMARY KEY,
@@ -207,14 +196,10 @@ CREATE TABLE IF NOT EXISTS packages (
   active INTEGER NOT NULL DEFAULT 1
 );
 `);
-
-// 套餐种子数据：首次启动从 config.packages 导入，之后以数据库为准（管理后台可在线配置）
 if (db.prepare('SELECT COUNT(*) c FROM packages').get().c === 0) {
   const ins = db.prepare('INSERT INTO packages (id, type, title, price, credits, days, description, sort, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)');
   config.packages.forEach((p, i) => ins.run(p.id, p.type, p.title, p.price, p.credits, p.days || 0, p.desc || '', i));
 }
-
-// 兼容旧库的增量字段（已存在则忽略）
 for (const sql of [
   'ALTER TABLE users ADD COLUMN last_daily_at INTEGER',
   'ALTER TABLE users ADD COLUMN invite_code TEXT',
@@ -225,10 +210,8 @@ for (const sql of [
   'ALTER TABLE generations ADD COLUMN premium INTEGER DEFAULT 0',
   'ALTER TABLE email_codes ADD COLUMN attempts INTEGER DEFAULT 0'
 ]) {
-  try { db.exec(sql); } catch (e) { /* column exists */ }
+  try { db.exec(sql); } catch (e) {  }
 }
-
-// 增量字段的配套索引（需在 ALTER 之后创建）
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_gen_batch ON generations(batch_id);
 CREATE INDEX IF NOT EXISTS idx_gen_share ON generations(share_id);

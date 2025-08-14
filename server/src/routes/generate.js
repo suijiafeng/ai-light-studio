@@ -14,8 +14,6 @@ const { enqueueGen } = require('../services/genQueue');
 
 const router = express.Router();
 const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: '生成请求太频繁，请稍后再试' });
-
-// ---------- 启动恢复：上次进程退出时卡在 processing 的任务，标记失败并退还算力 ----------
 (() => {
   const stale = db.prepare("SELECT id, user_id, cost FROM generations WHERE status = 'processing'").all();
   if (!stale.length) return;
@@ -23,15 +21,12 @@ const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: 
   let refunded = 0;
   for (const g of stale) {
     mark.run(Date.now(), g.id);
-    // 逐条退款：用户可能已注销（changeCredits 会抛"用户不存在"），单条失败不影响其余
     if (g.cost > 0) {
-      try { changeCredits(g.user_id, g.cost, 'refund', '任务中断退还算力'); refunded++; } catch (e) { /* 用户已不存在，跳过 */ }
+      try { changeCredits(g.user_id, g.cost, 'refund', '任务中断退还算力'); refunded++; } catch (e) {  }
     }
   }
   console.log(`ℹ️  已清理 ${stale.length} 个中断的生成任务，退还 ${refunded} 笔算力`);
 })();
-
-// 参数校验，返回错误信息或null
 function validateParams(params) {
   if (params.style && !STYLE_PRESETS[params.style]) return '无效的灯光风格';
   if (params.direction && !DIRECTIONS[params.direction]) return '无效的光源方向';
@@ -40,8 +35,6 @@ function validateParams(params) {
   if (params.colorTemp != null && (isNaN(t) || t < 2000 || t > 8000)) return '色温参数需在2000-8000K之间';
   return null;
 }
-
-// ---------- 图片上传（多层校验） ----------
 const MAX_FILE_MB = 15;          // 单文件大小上限
 const MIN_EDGE = 64;             // 最小边长（px），过小无法出图
 const MAX_EDGE = 8192;           // 最大边长（px），防超大图拖垮服务
@@ -51,7 +44,6 @@ const ALLOW_FORMATS = ['jpeg', 'png', 'webp'];
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, config.uploadDir),
   filename: (req, file, cb) => {
-    // 扩展名不可信，先落临时名，内容校验后按真实格式重命名
     cb(null, `tmp-${uuid()}`);
   }
 });
@@ -59,7 +51,6 @@ const upload = multer({
   storage,
   limits: { fileSize: MAX_FILE_MB * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
-    // 第一层：mimetype 预检（可伪造，仅做快速拦截）
     if (/^image\/(jpeg|png|webp)$/.test(file.mimetype)) cb(null, true);
     else cb(new Error('仅支持 JPG / PNG / WEBP 格式图片'));
   }
@@ -79,7 +70,6 @@ router.post('/upload', auth, uploadLimit, (req, res) => {
 
     const tmpPath = req.file.path;
     try {
-      // 第二层：内容嗅探——用sharp解析真实格式与尺寸，伪装成图片的文件在这里被拒
       const sharp = require('sharp');
       const meta = await sharp(tmpPath, { limitInputPixels: MAX_PIXELS }).metadata();
       if (!ALLOW_FORMATS.includes(meta.format)) {
@@ -95,7 +85,6 @@ router.post('/upload', auth, uploadLimit, (req, res) => {
         safeUnlink(tmpPath);
         return fail(res, 400, `图片尺寸过大（${w}×${h}），最大支持 ${MAX_EDGE} 像素边长`);
       }
-      // 校验通过：按真实格式重命名（扩展名与内容强一致）
       const ext = meta.format === 'jpeg' ? '.jpg' : `.${meta.format}`;
       const finalName = `${uuid()}${ext}`;
       fs.renameSync(tmpPath, path.join(config.uploadDir, finalName));
@@ -107,8 +96,6 @@ router.post('/upload', auth, uploadLimit, (req, res) => {
     }
   });
 });
-
-// ---------- 灯光风格列表 ----------
 router.get('/styles', (req, res) => {
   const styles = Object.entries(STYLE_PRESETS).map(([key, v]) => ({ key, name: v.name, defaultTemp: v.temp }));
   const directions = [
@@ -118,15 +105,11 @@ router.get('/styles', (req, res) => {
   const { currentAiProvider } = require('../services/settings');
   return ok(res, { styles, directions, costPerGeneration: config.costPerGeneration, multiCost: config.multiCost, aiProvider: currentAiProvider() });
 });
-
-// 校验并返回蒙版路径（局部重绘）
 function resolveMask(params) {
   if (!params.maskId) return null;
   const p = path.join(config.uploadDir, path.basename(params.maskId));
   return fs.existsSync(p) ? p : null;
 }
-
-// 启动一条异步生成任务（内部复用）
 function startJob({ userId, sourcePath, params, cost, premium, batchId = null }) {
   const id = uuid();
   db.prepare('INSERT INTO generations (id, user_id, source_path, params, status, cost, created_at, batch_id, premium) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -141,13 +124,10 @@ function startJob({ userId, sourcePath, params, cost, premium, batchId = null })
     .catch(err => {
       db.prepare('UPDATE generations SET status = ?, error = ?, finished_at = ? WHERE id = ?')
         .run('failed', err.message || 'AI生成失败', Date.now(), id);
-      // 失败自动退还；用户可能在出图期间已注销，退款失败不得让未捕获异常打挂进程
-      try { changeCredits(userId, cost, 'refund', '生成失败退还算力'); } catch (e) { /* 用户已不存在，忽略 */ }
+      try { changeCredits(userId, cost, 'refund', '生成失败退还算力'); } catch (e) {  }
     });
   return id;
 }
-
-// ---------- 发起AI生成（单张，异步任务） ----------
 router.post('/', auth, genLimit, (req, res) => {
   const { fileId, params = {} } = req.body || {};
   if (!fileId) return fail(res, 400, '缺少源图片，请先上传');
@@ -167,8 +147,6 @@ router.post('/', auth, genLimit, (req, res) => {
   const id = startJob({ userId: req.user.id, sourcePath, params, cost, premium: isPremium(req.user.id) });
   return ok(res, { id, status: 'processing', cost }, '任务已提交');
 });
-
-// ---------- 一键4风格连拍（批量生成） ----------
 router.post('/batch', auth, genLimit, (req, res) => {
   const { fileId, params = {} } = req.body || {};
   if (!fileId) return fail(res, 400, '缺少源图片，请先上传');
@@ -201,8 +179,6 @@ router.post('/batch', auth, genLimit, (req, res) => {
   );
   return ok(res, { batchId, ids, cost: total }, '连拍任务已提交');
 });
-
-// ---------- 批量处理（一次最多20张，会员/付费用户专属） ----------
 router.post('/bulk', auth, genLimit, (req, res) => {
   const { fileIds = [], params = {} } = req.body || {};
   if (!Array.isArray(fileIds) || !fileIds.length) return fail(res, 400, '请至少选择一张图片');
@@ -228,8 +204,6 @@ router.post('/bulk', auth, genLimit, (req, res) => {
   const ids = sources.map(sp => startJob({ userId: req.user.id, sourcePath: sp, params, cost: perCost, premium, batchId }));
   return ok(res, { batchId, ids, cost: total }, '批量任务已提交');
 });
-
-// LLM顾问：调用OpenAI兼容接口，返回结构化推荐（失败返回null走规则兜底）
 async function llmAdvise(lum, warmth) {
   const { apiKey, baseUrl, model } = config.llm;
   if (!apiKey) return null;
@@ -266,8 +240,6 @@ async function llmAdvise(lum, warmth) {
     return null; // LLM异常自动降级规则版
   }
 }
-
-// ---------- AI灯光顾问：分析照片给出参数推荐 ----------
 router.post('/advise', auth, async (req, res) => {
   const { fileId } = req.body || {};
   const p = fileId && path.join(config.uploadDir, path.basename(fileId));
@@ -278,8 +250,6 @@ router.post('/advise', auth, async (req, res) => {
     const [r, g, b] = stats.channels.map(c => c.mean);
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255; // 0-1 平均亮度
     const warmth = r / (b || 1); // >1 偏暖
-
-    // 优先LLM专业推荐（配置了LLM_API_KEY时），失败自动降级内置规则
     const llm = await llmAdvise(lum, warmth);
     if (llm) {
       return ok(res, { recommend: llm.rec, reason: llm.reason, source: 'llm', analysis: { luminance: Number(lum.toFixed(2)), warmth: Number(warmth.toFixed(2)) } });
@@ -306,9 +276,6 @@ router.post('/advise', auth, async (req, res) => {
     return fail(res, 500, '图片分析失败：' + e.message);
   }
 });
-
-// ---------- 作品分享 ----------
-// 生成分享链接
 router.post('/:id/share', auth, (req, res) => {
   const g = db.prepare('SELECT * FROM generations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!g) return fail(res, 404, '记录不存在');
@@ -320,8 +287,6 @@ router.post('/:id/share', auth, (req, res) => {
   }
   return ok(res, { shareId }, '分享链接已生成');
 });
-
-// 公开访问分享作品（无需登录）
 router.get('/share/:shareId', (req, res) => {
   const g = db.prepare('SELECT * FROM generations WHERE share_id = ?').get(req.params.shareId);
   if (!g || g.status !== 'success') return fail(res, 404, '分享不存在或已删除');
@@ -335,8 +300,6 @@ router.get('/share/:shareId', (req, res) => {
     createdAt: g.created_at
   });
 });
-
-// ---------- 查询连拍批次状态 ----------
 router.get('/batch/:batchId', auth, (req, res) => {
   const rows = db.prepare('SELECT * FROM generations WHERE batch_id = ? AND user_id = ? ORDER BY created_at ASC')
     .all(req.params.batchId, req.user.id);
@@ -357,8 +320,6 @@ const toItem = g => ({
   createdAt: g.created_at,
   finishedAt: g.finished_at
 });
-
-// ---------- 历史记录（分页 + 风格/状态筛选） ----------
 router.get('/', auth, (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(50, Math.max(1, Number(req.query.size) || 12));
@@ -377,15 +338,11 @@ router.get('/', auth, (req, res) => {
     .all(...args, size, (page - 1) * size);
   return ok(res, { total, page, size, list: rows.map(toItem) });
 });
-
-// ---------- 查询单个任务状态 ----------
 router.get('/:id', auth, (req, res) => {
   const g = db.prepare('SELECT * FROM generations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!g) return fail(res, 404, '记录不存在');
   return ok(res, toItem(g));
 });
-
-// ---------- 删除记录 ----------
 router.delete('/:id', auth, (req, res) => {
   const g = db.prepare('SELECT * FROM generations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!g) return fail(res, 404, '记录不存在');

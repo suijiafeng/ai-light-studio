@@ -53,7 +53,7 @@ const goRegister = () => {
   text-align: center; padding: 30px;
   h2 { margin: 0 0 4px; word-break: break-all; }
   .sub { margin: 0 0 20px; font-size: 13px; }
-  .slider { max-width: 720px; margin: 0 auto; }
+    .slider { max-width: 720px; height: 460px; margin: 0 auto; }
   .tip { font-size: 12px; margin: 10px 0 20px; }
 }
 </style>

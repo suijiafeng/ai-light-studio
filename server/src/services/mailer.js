@@ -1,8 +1,3 @@
-/**
- * 邮件验证码服务
- * - 配置了 SMTP_HOST 时通过真实SMTP发送
- * - 未配置时为开发模式：验证码打印到控制台并随接口返回（devCode），便于本地跑通流程
- */
 const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
@@ -60,7 +55,6 @@ function verifyCode(email, purpose, code) {
   ).get(email, purpose);
   if (!row || row.expires_at < Date.now()) return false;
   if (row.code !== String(code)) {
-    // 错误尝试计数：达到上限即作废该码，攻击者无法在有效期内穷举 6 位空间
     const attempts = (row.attempts || 0) + 1;
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
       db.prepare('UPDATE email_codes SET used = 1 WHERE id = ?').run(row.id);

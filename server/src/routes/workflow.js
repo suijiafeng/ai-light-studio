@@ -13,11 +13,7 @@ const sseHub = require('../services/workflow/sseHub');
 
 const router = express.Router();
 const wfRunLimit = rateLimit({ windowMs: 60 * 1000, max: 15, key: 'wfrun', message: '工作流运行请求太频繁，请稍后再试' });
-// /estimate 比 /run 宽松得多：前端画布编辑时按700ms防抖自动触发，正常交互每分钟可能达到几十次，
-// 这里给一个明显高于正常交互频率、但仍能挡住"无限次构造大图轮询估算"这类CPU消耗型滥用的上限。
 const wfEstimateLimit = rateLimit({ windowMs: 60 * 1000, max: 40, key: 'wfestimate', message: '预估请求太频繁，请稍后再试' });
-
-// ---------- 启动恢复：上次进程退出时卡在 pending/running 的工作流运行，标记失败并退还未执行节点算力 ----------
 (() => {
   const stale = db.prepare("SELECT id FROM workflow_runs WHERE status IN ('pending', 'running')").all();
   if (!stale.length) return;
@@ -28,8 +24,6 @@ const wfEstimateLimit = rateLimit({ windowMs: 60 * 1000, max: 40, key: 'wfestima
   }
   console.log(`ℹ️  已清理 ${stale.length} 个中断的工作流运行`);
 })();
-
-// 工作流图结构校验：{ nodes:[], edges:[] }，节点/连线需含必要字段
 function validateGraph(graph) {
   if (!graph || typeof graph !== 'object') return '工作流数据格式错误';
   if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return '缺少 nodes 或 edges';
@@ -42,8 +36,6 @@ function validateGraph(graph) {
   }
   return null;
 }
-
-// 统一 DB 行 → 前端结构
 const toDto = row => ({
   id: row.id,
   name: row.name,
@@ -53,8 +45,6 @@ const toDto = row => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
-
-// ---------- 我的工作流列表（不含 graph，减小体积） ----------
 router.get('/', auth, (req, res) => {
   const rows = db.prepare(
     'SELECT id, name, thumbnail, created_at, updated_at FROM workflows WHERE user_id = ? ORDER BY updated_at DESC'
@@ -66,8 +56,6 @@ router.get('/', auth, (req, res) => {
     }))
   });
 });
-
-// ---------- 新建 ----------
 router.post('/', auth, (req, res) => {
   const { name, graph, thumbnail } = req.body || {};
   const err = validateGraph(graph);
@@ -79,15 +67,11 @@ router.post('/', auth, (req, res) => {
   ).run(id, req.user.id, (name || '未命名工作流').slice(0, 60), JSON.stringify(graph), thumbnail || null, now, now);
   return ok(res, { id });
 });
-
-// ---------- 读取单个 ----------
 router.get('/:id', auth, (req, res) => {
   const row = db.prepare('SELECT * FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!row) return fail(res, 404, '工作流不存在');
   return ok(res, toDto(row));
 });
-
-// ---------- 更新 ----------
 router.put('/:id', auth, (req, res) => {
   const row = db.prepare('SELECT id FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!row) return fail(res, 404, '工作流不存在');
@@ -106,15 +90,11 @@ router.put('/:id', auth, (req, res) => {
   );
   return ok(res, {});
 });
-
-// ---------- 删除 ----------
 router.delete('/:id', auth, (req, res) => {
   const info = db.prepare('DELETE FROM workflows WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
   if (!info.changes) return fail(res, 404, '工作流不存在');
   return ok(res, {});
 });
-
-// =================== M2 执行引擎：估算 / 运行 / 查询 / 取消 / SSE ===================
 
 const toRunDto = r => ({
   id: r.id,
@@ -138,8 +118,6 @@ const toNodeRunDto = n => ({
   startedAt: n.started_at || null,
   finishedAt: n.finished_at || null
 });
-
-// ---------- 预估成本 ----------
 router.post('/:id/estimate', auth, wfEstimateLimit, (req, res) => {
   const wf = db.prepare('SELECT id FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!wf) return fail(res, 404, '工作流不存在');
@@ -149,8 +127,6 @@ router.post('/:id/estimate', auth, wfEstimateLimit, (req, res) => {
   const total = perNode.reduce((s, n) => s + n.cost, 0);
   return ok(res, { total, perNode });
 });
-
-// ---------- 运行当前已保存的工作流 ----------
 router.post('/:id/run', auth, wfRunLimit, (req, res) => {
   const wf = db.prepare('SELECT * FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!wf) return fail(res, 404, '工作流不存在');
@@ -166,7 +142,6 @@ router.post('/:id/run', auth, wfRunLimit, (req, res) => {
 
   let runId;
   try {
-    // 扣费 + 建 run + 建 node_runs 放同一事务：任一环节失败（尤其算力不足）整体回滚，不留孤儿记录
     runId = db.transaction(() => {
       changeCredits(req.user.id, -total, 'consume', `工作流运行消耗${total}算力`);
       const id = uuid();
@@ -180,21 +155,15 @@ router.post('/:id/run', auth, wfRunLimit, (req, res) => {
     if (e.code === 429) return fail(res, 429, `算力不足，本次运行需${total}算力，请充值`);
     throw e;
   }
-
-  // 异步执行，不阻塞响应；引擎内部自身的异常兜底已经把 run 标为 failed 并退款，这里只兜底日志
   executeRun(runId).catch(err => console.error('[workflow engine] executeRun 未捕获异常', err));
   return ok(res, { runId });
 });
-
-// ---------- 轮询兜底：运行详情 ----------
 router.get('/run/:runId', auth, (req, res) => {
   const run = db.prepare('SELECT * FROM workflow_runs WHERE id = ? AND user_id = ?').get(req.params.runId, req.user.id);
   if (!run) return fail(res, 404, '运行记录不存在');
   const nodes = db.prepare('SELECT * FROM node_runs WHERE run_id = ?').all(run.id);
   return ok(res, { run: toRunDto(run), nodes: nodes.map(toNodeRunDto) });
 });
-
-// ---------- 取消运行（只翻状态标志，真正的退款交给引擎下一次调度 tick 处理，避免竞态双重退款） ----------
 router.post('/run/:runId/cancel', auth, (req, res) => {
   const run = db.prepare('SELECT * FROM workflow_runs WHERE id = ? AND user_id = ?').get(req.params.runId, req.user.id);
   if (!run) return fail(res, 404, '运行记录不存在');
@@ -202,10 +171,6 @@ router.post('/run/:runId/cancel', auth, (req, res) => {
   db.prepare("UPDATE workflow_runs SET status = 'canceled' WHERE id = ?").run(run.id);
   return ok(res, {});
 });
-
-// ---------- SSE：节点级实时进度 ----------
-// EventSource 无法携带自定义 header，鉴权改走 query token；鉴权失败必须在 writeHead 之前
-// 以普通 JSON 响应返回，不能把错误也塞进 event-stream。
 router.get('/run/:runId/events', (req, res) => {
   const token = req.query.token;
   if (!token) return fail(res, 401, '未登录或登录已过期');

@@ -1,6 +1,3 @@
-// 节点类型注册表 —— 前端画布 / 属性面板共用的唯一契约。
-// I/O 类型系统用于连线校验：'any' 与任意类型兼容，否则需类型相等。
-// fields 采用 schema 驱动，新增节点类型只需在此追加数据，无需改组件。
 
 export const STYLE_OPTIONS = [
   { key: 'night_warm', name: '夜景暖光' },
@@ -57,13 +54,9 @@ export const NODE_TYPES = {
     fields: []
   }
 }
-
-// M1 面板中可拖入的节点（后续里程碑再开放 fanout/compare/img2video 等）
 export const PALETTE = ['image-input', 'relight', 'output']
 
 export const nodeDef = type => NODE_TYPES[type] || null
-
-// 连线类型校验：source 的输出类型 与 target 的输入类型 是否兼容
 export function canConnect(sourceType, targetType) {
   const s = NODE_TYPES[sourceType], t = NODE_TYPES[targetType]
   if (!s || !t) return false

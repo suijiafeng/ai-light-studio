@@ -1,7 +1,6 @@
 <template>
   <div class="page-container studio">
-    <!-- ============ 顶部栏 ============ -->
-    <div class="studio-top">
+        <div class="studio-top">
       <div class="st-title">
         <el-icon class="mk-gradient-text"><MagicStick /></el-icon> AI灯光工作台
         <el-tag v-if="aiProvider === 'mock'" type="warning" effect="plain" size="small" round>演示模式</el-tag>
@@ -11,8 +10,7 @@
       </div>
     </div>
 
-    <!-- ============ 步骤条 ============ -->
-    <div class="steps">
+        <div class="steps">
       <div class="step" :class="{ active: step === 1, done: step > 1 }">
         <span class="n"><el-icon v-if="step > 1"><Check /></el-icon><template v-else>1</template></span>上传照片
       </div>
@@ -27,8 +25,7 @@
     </div>
 
     <div class="mk-card stage">
-      <!-- ============ 第一步：上传（空态） ============ -->
-      <template v-if="step === 1">
+            <template v-if="step === 1">
         <div
           class="drop"
           :class="{ dragging }"
@@ -52,11 +49,9 @@
         </div>
       </template>
 
-      <!-- ============ 第二步：挑选效果 ============ -->
-      <template v-else-if="step === 2">
+            <template v-else-if="step === 2">
         <div class="work">
-          <!-- 左：照片 + 工具 -->
-          <div class="canvas-col">
+                    <div class="canvas-col">
             <div class="photo">
               <el-image :src="source.url" fit="contain" :preview-src-list="[source.url]" class="photo-img" />
               <span class="photo-badge">原图</span>
@@ -71,8 +66,7 @@
             </div>
           </div>
 
-          <!-- 右：风格卡 + 微调 + 主行动 -->
-          <div class="side">
+                    <div class="side">
             <div>
               <div class="side-h">
                 选一个想要的效果
@@ -106,8 +100,7 @@
               />
             </div>
 
-            <!-- 微调（默认折叠） -->
-            <div class="adv" :class="{ open: advOpen }">
+                        <div class="adv" :class="{ open: advOpen }">
               <div class="adv-toggle" @click="advOpen = !advOpen">
                 <span><el-icon><Operation /></el-icon> 微调参数（可选）</span>
                 <el-icon class="chev"><ArrowDown /></el-icon>
@@ -144,8 +137,7 @@
               </div>
             </div>
 
-            <!-- 主行动 -->
-            <div class="cta-zone">
+                        <div class="cta-zone">
               <el-button class="mk-btn-gradient btn-primary" size="large" @click="generate">
                 <el-icon><MagicStick /></el-icon>&nbsp;生成效果 · 消耗 {{ cost }} 算力
               </el-button>
@@ -155,17 +147,14 @@
         </div>
       </template>
 
-      <!-- ============ 第三步：生成中 / 结果 ============ -->
-      <template v-else>
-        <!-- 生成中 -->
-        <div v-if="generating" class="result-loading">
+            <template v-else>
+                <div v-if="generating" class="result-loading">
           <el-progress type="circle" :percentage="fakePercent" :width="96" />
           <p class="text-secondary">AI正在重绘灯光效果，请稍候…</p>
           <p class="text-secondary small">通常需要 10–40 秒</p>
         </div>
 
-        <!-- 4风格连拍结果 -->
-        <div v-else-if="batchResults.length" class="batch-wrap">
+                <div v-else-if="batchResults.length" class="batch-wrap">
           <div class="batch-grid">
             <div
               v-for="b in batchResults"
@@ -196,8 +185,7 @@
           <p v-else class="text-secondary small center">点击上方缩略图查看大图</p>
         </div>
 
-        <!-- 单张结果 -->
-        <div v-else-if="result && result.status === 'success'" class="result-view single">
+                <div v-else-if="result && result.status === 'success'" class="result-view single">
           <CompareSlider v-if="compareMode" :before="result.sourceUrl" :after="result.resultUrl" class="result-media" />
           <el-image v-else :src="result.resultUrl" fit="contain" :preview-src-list="[result.resultUrl, result.sourceUrl]" class="result-media" />
           <div class="result-actions">
@@ -211,8 +199,7 @@
           <div class="tier-line" v-html="tierHtml(result)"></div>
         </div>
 
-        <!-- 失败 -->
-        <div v-else-if="result && result.status === 'failed'" class="result-empty">
+                <div v-else-if="result && result.status === 'failed'" class="result-empty">
           <el-icon :size="40" color="#f56c6c"><WarningFilled /></el-icon>
           <p>生成失败：{{ result.error || '未知错误' }}</p>
           <p class="text-secondary small">算力已自动退还</p>
@@ -224,8 +211,7 @@
       </template>
     </div>
 
-    <!-- 局部重绘选区弹窗 -->
-    <el-dialog v-model="maskVisible" title="局部重绘 · 涂抹要重新打光的区域" width="680px" destroy-on-close @opened="initMask">
+        <el-dialog v-model="maskVisible" title="局部重绘 · 涂抹要重新打光的区域" width="680px" destroy-on-close @opened="initMask">
       <div class="mask-toolbar">
         <span class="text-secondary">笔刷大小</span>
         <el-slider v-model="brushSize" :min="10" :max="80" style="width:160px" />
@@ -249,8 +235,7 @@
       </template>
     </el-dialog>
 
-    <!-- 裁剪弹窗 -->
-    <el-dialog v-model="cropVisible" title="裁剪图片" width="640px" destroy-on-close @opened="initCropper">
+        <el-dialog v-model="cropVisible" title="裁剪图片" width="640px" destroy-on-close @opened="initCropper">
       <div class="crop-wrap"><img ref="cropImg" :src="source.url" style="max-width:100%;display:block" /></div>
       <template #footer>
         <el-button @click="cropVisible = false">取消</el-button>
@@ -282,7 +267,6 @@ const directions = ref([
   { key: 'top', name: '顶部' }, { key: 'bottom', name: '底部' }
 ])
 const styleNames = { night_warm: '夜景暖光', daylight: '日间自然光', office_cool: '办公冷光', wall_wash: '氛围洗墙光' }
-// 风格可视化色板（用于风格卡与示例，模拟打光调性；真实预览由生成结果替换）
 const SWATCHES = {
   night_warm: 'radial-gradient(120% 90% at 30% 20%,#ffd9a0 0%,#c98a4a 35%,#5a3d28 75%,#241a12 100%)',
   daylight: 'radial-gradient(120% 90% at 40% 15%,#fff6e6 0%,#dfe6ec 40%,#9fb0bd 80%,#5c6b78 100%)',
@@ -316,8 +300,6 @@ const uploadPercent = ref(0)
 const generating = ref(false)
 const fakePercent = ref(0)
 const result = ref(null)
-
-// 三步：1 上传 → 2 挑选 → 3 生成/结果
 const step = computed(() => {
   if (!source.fileId) return 1
   if (generating.value || result.value || batchResults.value.length) return 3
@@ -336,13 +318,11 @@ onMounted(async () => {
     cost.value = data.costPerGeneration
     multiCost.value = data.multiCost || 8
     if (data.aiProvider) aiProvider.value = data.aiProvider
-  } catch (e) { /* 网络错误已统一提示 */ }
-  // 从历史图库「再次编辑」进入
+  } catch (e) {  }
   if (route.query.fileId) {
     source.fileId = String(route.query.fileId)
     source.url = String(route.query.url || `/uploads/${route.query.fileId}`)
   }
-  // 从模板案例「用同款参数」进入
   for (const k of ['style', 'direction']) {
     if (route.query[k]) params[k] = String(route.query[k])
   }
@@ -358,8 +338,6 @@ const stopTimers = () => {
   clearInterval(pollTimer); clearInterval(fakeTimer); clearTimeout(timeoutTimer)
   pollTimer = fakeTimer = timeoutTimer = null
 }
-
-// ---------- 上传 ----------
 const pickFile = () => fileInput.value.click()
 const onFileChange = e => { const f = e.target.files[0]; if (f) doUpload(f); e.target.value = '' }
 const onDrop = e => { dragging.value = false; const f = e.dataTransfer.files[0]; if (f) doUpload(f) }
@@ -388,8 +366,6 @@ const doUpload = async file => {
     uploading.value = false
   }
 }
-
-// ---------- 裁剪 ----------
 const cropVisible = ref(false)
 const cropImg = ref()
 let cropper = null
@@ -405,8 +381,6 @@ const confirmCrop = () => {
     cropper?.destroy(); cropper = null
   }, 'image/jpeg', 0.92)
 }
-
-// ---------- 局部重绘选区（画笔蒙版） ----------
 const maskVisible = ref(false)
 const maskImg = ref()
 const maskCanvas = ref()
@@ -442,7 +416,6 @@ const clearMask = () => maskCtx && maskCtx.clearRect(0, 0, maskCanvas.value.widt
 const confirmMask = () => {
   const cvs = maskCanvas.value
   const src = maskCtx.getImageData(0, 0, cvs.width, cvs.height)
-  // 生成黑白蒙版：涂抹处白色，其余黑色
   const out = document.createElement('canvas')
   out.width = cvs.width; out.height = cvs.height
   const octx = out.getContext('2d')
@@ -468,8 +441,6 @@ const confirmMask = () => {
     }
   }, 'image/png')
 }
-
-// ---------- AI灯光顾问（上传后自动运行） ----------
 const autoAdvise = async () => {
   if (!source.fileId) return
   advising.value = true
@@ -479,13 +450,10 @@ const autoAdvise = async () => {
     if (recommend && recommend.style) recommendedStyle.value = recommend.style
     adviseReason.value = reason
   } catch (e) {
-    /* 推荐失败静默降级，用户仍可手动选风格 */
-  } finally {
+      } finally {
     advising.value = false
   }
 }
-
-// ---------- 分享 ----------
 const share = async () => {
   try {
     const { shareId } = await apiShare(result.value.id)
@@ -496,13 +464,9 @@ const share = async () => {
     if (e.code !== -1) ElMessage.error(e.message)
   }
 }
-
-// ---------- 会员/水印提示 ----------
 const tierHtml = r => r.premium
   ? '<span class="mk-tier premium">2048px 高清 · 无水印</span>'
   : '<span class="mk-tier free">免费版 1024px · 含水印</span> <a href="/recharge" class="mk-tier-link">开通会员享 2048px 高清无水印 →</a>'
-
-// ---------- 生成 ----------
 const selectStyle = s => {
   params.style = s.key
   params.colorTemp = s.defaultTemp || params.colorTemp
@@ -526,8 +490,6 @@ const handleGenError = e => {
     ElMessage.error(e.message)
   }
 }
-
-// 一键4风格连拍
 const generateBatch = async () => {
   if (!source.fileId) return ElMessage.warning('请先上传照片')
   if (generating.value) return
@@ -558,7 +520,7 @@ const generateBatch = async () => {
           notifyDone(`4风格连拍完成，成功${okList.length}张`)
           if (okList.length < data.list.length) userStore.fetchMe()
         }
-      } catch (e) { /* 忽略单次轮询失败 */ }
+      } catch (e) {  }
     }, 1500)
   } catch (e) {
     handleGenError(e)
@@ -575,7 +537,6 @@ const generate = async () => {
   batchResults.value = []
   compareMode.value = false
   fakeTimer = setInterval(() => { if (fakePercent.value < 95) fakePercent.value += Math.ceil(Math.random() * 4) }, 400)
-  // 超时自动终止（3分钟）
   timeoutTimer = setTimeout(() => {
     if (generating.value) { stopTimers(); generating.value = false; ElMessage.error('生成超时，请重试') }
   }, 185000)
@@ -594,22 +555,18 @@ const generate = async () => {
           if (g.status === 'success') { ElMessage.success('生成完成！'); notifyDone() }
           else userStore.fetchMe()
         }
-      } catch (e) { /* 轮询单次失败忽略，等待下一轮 */ }
+      } catch (e) {  }
     }, 1500)
   } catch (e) {
     handleGenError(e)
   }
 }
-
-// ---------- 结果操作 ----------
 const download = () => {
   const a = document.createElement('a')
   a.href = result.value.resultUrl
   a.download = `ai-light-${Date.now()}.jpg`
   a.click()
 }
-
-// 再次编辑：将生成结果作为新的源图
 const editResult = async () => {
   try {
     const resp = await fetch(result.value.resultUrl)
@@ -625,7 +582,6 @@ const editResult = async () => {
 <style scoped lang="scss">
 .studio { max-width: 1080px; margin: 0 auto; }
 
-/* ---------- 顶部栏 ---------- */
 .studio-top {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
@@ -639,7 +595,6 @@ const editResult = async () => {
   b { color: var(--mk-text); font-variant-numeric: tabular-nums; margin-left: 2px; }
 }
 
-/* ---------- 步骤条 ---------- */
 .steps { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .step {
   display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--mk-text-2);
@@ -658,7 +613,6 @@ const editResult = async () => {
 
 .stage { padding: 22px; min-height: 460px; display: flex; flex-direction: column; }
 
-/* ---------- 第一步：上传 ---------- */
 .drop {
   border: 2px dashed var(--mk-border); border-radius: 16px;
   padding: 46px 24px; text-align: center; cursor: pointer; transition: .2s;
@@ -684,7 +638,6 @@ const editResult = async () => {
   }
 }
 
-/* ---------- 第二步：挑选 ---------- */
 .work { display: grid; grid-template-columns: 1fr 320px; gap: 20px; flex: 1; }
 .canvas-col { display: flex; flex-direction: column; gap: 12px; }
 .photo {
@@ -724,7 +677,6 @@ const editResult = async () => {
 }
 .advise-tip { margin-top: 10px; :deep(.el-alert__title) { font-size: 12px; line-height: 1.6; } }
 
-/* 微调折叠 */
 .adv { border-top: 1px solid var(--mk-border); padding-top: 12px; }
 .adv-toggle {
   display: flex; align-items: center; justify-content: space-between; cursor: pointer;
@@ -744,7 +696,6 @@ const editResult = async () => {
   &.on { background: var(--mk-gradient); color: #fff; border-color: transparent; }
 }
 
-/* 主行动 */
 .cta-zone { display: flex; flex-direction: column; gap: 9px; margin-top: auto; }
 .btn-primary { width: 100%; font-size: 15px; font-weight: 700; padding: 14px; }
 .btn-secondary {
@@ -753,7 +704,6 @@ const editResult = async () => {
   &:hover { color: var(--mk-primary); }
 }
 
-/* ---------- 第三步：结果 ---------- */
 .result-loading, .result-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   p { margin: 0; font-size: 14px; }
@@ -770,7 +720,6 @@ const editResult = async () => {
 :deep(.mk-tier.free) { background: var(--mk-border); color: var(--mk-text-2); }
 :deep(.mk-tier-link) { color: var(--mk-primary); text-decoration: none; font-weight: 600; }
 
-/* 连拍网格 */
 .batch-wrap { flex: 1; display: flex; flex-direction: column; gap: 14px; }
 .batch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .batch-cell {
@@ -789,7 +738,6 @@ const editResult = async () => {
 .small { font-size: 12px; }
 .center { text-align: center; margin-top: 8px; }
 
-/* 弹窗 */
 .mask-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .mask-wrap {
   position: relative; display: inline-block; max-height: 440px; overflow: hidden; border-radius: 8px;
@@ -798,7 +746,6 @@ const editResult = async () => {
 }
 .crop-wrap { max-height: 420px; overflow: hidden; }
 
-/* ---------- 移动端 ---------- */
 @media (max-width: 760px) {
   .work { grid-template-columns: 1fr; }
   .ex-row { grid-template-columns: repeat(2, 1fr); }

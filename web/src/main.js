@@ -10,8 +10,6 @@ import router from './router'
 import './styles/index.scss'
 
 const app = createApp(App)
-
-// 全局统一注册 Element Plus 图标，杜绝图标组件缺失报错
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
@@ -19,8 +17,6 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
-
-// 全局错误上报（每分钟最多3条，避免刷屏）
 let errCount = 0
 setInterval(() => { errCount = 0 }, 60000)
 const reportError = (message, stack) => {
@@ -36,14 +32,10 @@ app.config.errorHandler = (err, instance, info) => {
   reportError(err?.message || err, `${err?.stack || ''}\n[vue info] ${info}`)
 }
 window.addEventListener('unhandledrejection', e => {
-  // 业务reject（带code的接口错误）不上报
   if (e.reason && e.reason.code !== undefined) return
-  // 弹窗取消（ElMessageBox reject 'cancel'/'close'）不是错误，不上报
   if (e.reason === 'cancel' || e.reason === 'close') return
   reportError(e.reason?.message || e.reason, e.reason?.stack)
 })
-
-// iOS Safari 忽略 user-scalable=no，用JS兜底禁止手势缩放与双击放大
 document.addEventListener('gesturestart', e => e.preventDefault())
 document.addEventListener('gesturechange', e => e.preventDefault())
 let lastTouch = 0

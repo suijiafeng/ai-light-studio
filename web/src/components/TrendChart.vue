@@ -1,20 +1,16 @@
 <template>
   <div class="trend-chart">
     <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" class="chart-svg">
-      <!-- 网格线 -->
-      <line v-for="i in 4" :key="'g' + i" :x1="PAD" :x2="W - PAD"
+            <line v-for="i in 4" :key="'g' + i" :x1="PAD" :x2="W - PAD"
         :y1="PAD + ((H - PAD * 2) / 4) * i" :y2="PAD + ((H - PAD * 2) / 4) * i"
         class="grid" />
-      <!-- 柱状：新增用户 -->
-      <rect v-for="(d, i) in data" :key="'b' + i"
+            <rect v-for="(d, i) in data" :key="'b' + i"
         :x="x(i) - barW / 2" :y="y(d.newUsers)" :width="barW"
         :height="Math.max(H - PAD - y(d.newUsers), d.newUsers > 0 ? 2 : 0)"
         rx="3" class="bar" />
-      <!-- 折线：生成次数 -->
-      <polyline :points="linePoints" class="line" />
+            <polyline :points="linePoints" class="line" />
       <circle v-for="(d, i) in data" :key="'c' + i" :cx="x(i)" :cy="y(d.generations)" r="3.5" class="dot" />
-      <!-- 数值标注（非零才标） -->
-      <text v-for="(d, i) in data" :key="'t' + i" v-show="d.generations > 0"
+            <text v-for="(d, i) in data" :key="'t' + i" v-show="d.generations > 0"
         :x="x(i)" :y="y(d.generations) - 8" text-anchor="middle" class="val">{{ d.generations }}</text>
     </svg>
     <div class="x-axis">

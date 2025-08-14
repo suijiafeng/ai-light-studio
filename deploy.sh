@@ -40,9 +40,18 @@ if [ ! -f "$ENV_FILE" ]; then
   fi
   ok "已从模板生成 $ENV_FILE（${ENV_NAME}环境默认mock配置，可直接使用）"
 fi
-# 生产环境安全检查：JWT_SECRET 不能是模板占位
-if [ "$ENV_NAME" = "production" ] && grep -q '__请改为随机长字符串__' "$ENV_FILE"; then
-  die "生产环境 $ENV_FILE 中 JWT_SECRET 仍是模板占位符，请先修改"
+# 生产环境安全检查：JWT_SECRET 不能是模板占位/过短，支付与AI不能停在mock（否则用户可零成本
+# 自证"已支付"领算力，或压根生成不出真实效果图）
+if [ "$ENV_NAME" = "production" ]; then
+  if grep -q '__请改为随机长字符串__' "$ENV_FILE"; then
+    die "生产环境 $ENV_FILE 中 JWT_SECRET 仍是模板占位符，请先修改（openssl rand -hex 32）"
+  fi
+  JWT_SECRET_VAL=$(grep -E '^JWT_SECRET=' "$ENV_FILE" | tail -1 | cut -d= -f2-)
+  [ "${#JWT_SECRET_VAL}" -ge 32 ] || die "生产环境 JWT_SECRET 长度不足32位，请用 openssl rand -hex 32 生成"
+  PAY_PROVIDER_VAL=$(grep -E '^PAY_PROVIDER=' "$ENV_FILE" | tail -1 | cut -d= -f2-)
+  [ "$PAY_PROVIDER_VAL" != "mock" ] || die "生产环境 PAY_PROVIDER 仍是 mock，任何登录用户都能免费给自己发算力！请改为 wechat 并填好商户信息"
+  AI_PROVIDER_VAL=$(grep -E '^AI_PROVIDER=' "$ENV_FILE" | tail -1 | cut -d= -f2-)
+  [ "$AI_PROVIDER_VAL" != "mock" ] || die "生产环境 AI_PROVIDER 仍是 mock，用户生成不出真实效果图，请改为 replicate/fal 并填好密钥"
 fi
 
 APP_PORT=$(grep -E '^APP_PORT=' "$ENV_FILE" | tail -1 | cut -d= -f2)

@@ -75,11 +75,10 @@
       </div>
     </div>
 
-    <!-- 统一查看弹窗：前后对比 -->
-    <el-dialog v-model="viewVisible" :title="viewItem ? `${styleName(viewItem.params.style)} · ${formatTime(viewItem.createdAt)}` : ''" width="720px" destroy-on-close>
+        <el-dialog v-model="viewVisible" :title="viewItem ? `${styleName(viewItem.params.style)} · ${formatTime(viewItem.createdAt)}` : ''" width="720px" destroy-on-close>
       <template v-if="viewItem">
-        <CompareSlider v-if="viewItem.resultUrl" :before="viewItem.sourceUrl" :after="viewItem.resultUrl" />
-        <el-image v-else :src="viewItem.sourceUrl" fit="contain" style="width:100%" />
+        <CompareSlider v-if="viewItem.resultUrl" :before="viewItem.sourceUrl" :after="viewItem.resultUrl" class="view-compare" />
+        <el-image v-else :src="viewItem.sourceUrl" fit="contain" style="width:100%;height:460px" />
         <p class="text-secondary view-tip">{{ viewItem.resultUrl ? '拖动滑块对比原图与效果图' : '该记录暂无结果图' }}</p>
       </template>
       <template #footer>
@@ -89,8 +88,7 @@
       </template>
     </el-dialog>
 
-    <!-- 多方案并排对比弹窗 -->
-    <el-dialog v-model="compareVisible" title="方案对比" :width="picked.length > 2 ? '92%' : '760px'" top="6vh">
+        <el-dialog v-model="compareVisible" title="方案对比" :width="picked.length > 2 ? '92%' : '760px'" top="6vh">
       <div class="compare-grid" :style="{ gridTemplateColumns: `repeat(${picked.length}, 1fr)` }">
         <div v-for="item in picked" :key="item.id" class="compare-cell">
           <el-image :src="item.resultUrl" fit="contain" class="compare-img" :preview-src-list="picked.map(p => p.resultUrl)" />
@@ -140,8 +138,6 @@ const reload = () => { page.value = 1; load() }
 const styleName = k => STYLE_NAMES[k] || '自定义'
 const dirName = k => DIR_NAMES[k] || '环境光'
 const formatTime = ts => new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-
-// ---------- 多方案并排对比 ----------
 const compareMode = ref(false)
 const compareVisible = ref(false)
 const picked = ref([])
@@ -186,8 +182,6 @@ const reEdit = item => {
   const fileId = item.sourceUrl.split('/').pop()
   router.push({ path: '/studio', query: { fileId, url: item.sourceUrl } })
 }
-
-// 统一查看弹窗
 const viewVisible = ref(false)
 const viewItem = ref(null)
 const openView = item => {
@@ -254,6 +248,7 @@ const remove = async item => {
   }
 }
 .pager { display: flex; justify-content: center; margin-top: 26px; }
+.view-compare { width: 100%; height: 460px; }
 .view-tip { font-size: 12px; text-align: center; margin: 10px 0 0; }
 .compare-tip { font-size: 12px; }
 .compare-grid { display: grid; gap: 14px; }

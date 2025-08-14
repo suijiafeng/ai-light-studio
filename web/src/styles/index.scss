@@ -1,9 +1,3 @@
-/* ================= ProSaaS Corporate · 企业级视觉规范 =================
- * 参考 /Users/apple/Downloads/stitch_saas（ProSaaS Corporate / Lumina Design Pro 系列稿）：
- * 去渐变、去光效、纯色 + 细线边框，企业蓝（#0057c2）为核心色，信息密度优先于装饰。
- * --mk-gradient 保留变量名（避免逐处修改模板里的 .mk-btn-gradient/.mk-gradient-text），
- * 但值改成纯色——组件视觉上自动从"渐变"降级为"纯色"，无需改动任何页面模板。
- */
 
 :root {
   --mk-primary: #0057c2;
@@ -37,40 +31,30 @@ html.dark {
 
 * { box-sizing: border-box; }
 
-/* ================= 移动端基础适配（iOS / Android） ================= */
 html {
-  -webkit-text-size-adjust: 100%;   /* 禁止横竖屏切换时字号突变 */
-  text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent; /* 去掉点击时的灰色高亮块 */
-}
+  -webkit-text-size-adjust: 100%;     text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; }
 body {
-  overscroll-behavior-y: none;      /* 禁止下拉回弹露出背景 */
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;        -webkit-overflow-scrolling: touch;
 }
-/* iOS 会对 font-size < 16px 的输入框自动放大页面，统一到16px杜绝 */
 input, textarea, select, .el-input__inner, .el-textarea__inner {
   font-size: 16px;
 }
-/* 顶栏与页面底部预留刘海/手势条安全区 */
 .app-header .header-inner { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .app-main { padding-bottom: env(safe-area-inset-bottom); }
-/* 触控目标最小尺寸，避免误触 */
 @media (max-width: 768px) {
   .el-button { min-height: 38px; }
   .el-dropdown-menu__item { min-height: 42px; display: flex; align-items: center; }
 }
 
-/* 首屏与主题切换期间禁用过渡动画：刷新不闪、切换主题所有颜色同步变化 */
 html.boot-lock *, html.boot-lock *::before, html.boot-lock *::after,
 html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
   transition: none !important;
   animation: none !important;
 }
 
-/* 滚动条常驻占位，避免页面高度变化时内容左右抖动 */
 html { scrollbar-gutter: stable; }
 
-/* el-tag 不参与任何过渡（刷新/主题切换时不闪动） */
 .el-tag { transition: none !important; }
 
 html, body, #app {
@@ -86,7 +70,6 @@ body {
   transition: background 0.3s ease, color 0.3s ease;
 }
 
-/* 通用卡片：纯色背景 + 1px 细线边框，不用阴影/渐变表达层级（企业级"稳重"基调） */
 .mk-card {
   background: var(--mk-card);
   border: 1px solid var(--mk-border);
@@ -98,7 +81,6 @@ body {
   border-color: var(--mk-primary);
 }
 
-/* 渐变文字 / 渐变按钮 */
 .mk-gradient-text {
   background: var(--mk-gradient);
   -webkit-background-clip: text;
@@ -135,7 +117,6 @@ body {
   transform: rotate(90deg);
 }
 
-/* 文本截断工具类 */
 .ellipsis {
   overflow: hidden;
   white-space: nowrap;
@@ -148,46 +129,37 @@ body {
   overflow: hidden;
 }
 
-/* 卡片内容不外溢 */
 .mk-card { overflow: hidden; }
 img { max-width: 100%; }
 
-/* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0, 87, 194, 0.25); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ================= 移动端适配 ================= */
 @media (max-width: 768px) {
   .page-container { padding: 16px 12px calc(40px + env(safe-area-inset-bottom)); }
   .page-title { font-size: 18px; flex-wrap: wrap; }
   .mk-card { padding: 14px; }
-  /* 弹窗接近全屏并预留安全区，长内容可滚动 */
-  .el-dialog {
+    .el-dialog {
     --el-dialog-width: 94% !important; width: 94% !important;
     margin-top: 8vh !important;
     max-height: 84vh; display: flex; flex-direction: column; overflow: hidden;
   }
   .el-dialog__body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .el-message-box { width: 88% !important; max-width: 420px; }
-  /* 表格横向滚动，不撑破 */
-  .el-table { font-size: 12px; }
+    .el-table { font-size: 12px; }
   .el-tabs__item { padding: 0 12px; font-size: 14px; }
-  /* 分页在小屏更紧凑 */
-  .el-pagination { justify-content: center; flex-wrap: wrap; }
-  /* 表单标签与输入在窄屏纵向排列已由 label-position=top 处理 */
-}
+    .el-pagination { justify-content: center; flex-wrap: wrap; }
+  }
 @media (max-width: 400px) {
   .page-title { font-size: 16px; }
 }
 
-/* 打印（方案报告导出PDF）时隐藏应用外壳 */
 @media print {
   .app-header { display: none !important; }
   body, html.dark body { background: #fff !important; }
 }
 
-/* Element Plus 组件圆角统一：组件级（按钮/输入框）用 4px，容器级（弹窗/卡片）用 --mk-radius(8px) */
 .el-button { border-radius: 4px; }
 .el-input__wrapper, .el-textarea__inner { border-radius: 4px; }
 .el-dialog { border-radius: var(--mk-radius); }

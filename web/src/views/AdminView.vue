@@ -6,8 +6,7 @@
 
     <el-tabs v-else v-model="tab">
       <el-tab-pane label="数据总览" name="overview">
-        <!-- AI出图模式切换：运行时生效，无需重启 -->
-        <div class="mk-card mode-card">
+                <div class="mk-card mode-card">
           <span class="mode-label">AI出图模式</span>
           <el-radio-group :model-value="aiMode" @change="switchAiMode">
             <el-radio-button value="mock">演示模式</el-radio-button>
@@ -67,8 +66,7 @@
     <el-skeleton v-else :rows="6" animated />
       </el-tab-pane>
 
-      <!-- 用户管理 -->
-      <el-tab-pane label="用户管理" name="users">
+            <el-tab-pane label="用户管理" name="users">
         <div class="mk-card">
           <div class="search-row">
             <el-input v-model="keyword" placeholder="搜索邮箱/昵称" clearable style="width:260px" @keyup.enter="loadUsers" />
@@ -124,8 +122,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 订单管理 -->
-      <el-tab-pane label="订单管理" name="orders">
+            <el-tab-pane label="订单管理" name="orders">
         <div class="mk-card">
           <div class="search-row">
             <el-input v-model="orderKeyword" placeholder="搜索订单号/邮箱" clearable style="width:240px" @keyup.enter="loadOrders" />
@@ -166,8 +163,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 套餐配置 -->
-      <el-tab-pane label="套餐配置" name="packages">
+            <el-tab-pane label="套餐配置" name="packages">
         <div class="mk-card">
           <div class="search-row">
             <el-button type="primary" plain @click="openPkgDialog()">新建套餐</el-button>
@@ -226,8 +222,7 @@
         </el-dialog>
       </el-tab-pane>
 
-      <!-- 错误日志 -->
-      <el-tab-pane label="错误日志" name="errors">
+            <el-tab-pane label="错误日志" name="errors">
         <div class="mk-card">
           <el-table :data="errors" size="small" empty-text="暂无错误记录，运行良好">
             <el-table-column label="来源" width="70">
@@ -244,8 +239,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 内容抽查 -->
-      <el-tab-pane label="内容抽查" name="content">
+            <el-tab-pane label="内容抽查" name="content">
         <div class="mk-card">
           <div class="gen-grid">
             <div v-for="g in gens" :key="g.id" class="gen-cell">
@@ -268,8 +262,6 @@ import { apiStatsOverview, apiAdminUsers, apiAdminAdjustCredits, apiAdminBan, ap
 import { useUserStore } from '@/stores/user'
 import TrendChart from '@/components/TrendChart.vue'
 const userStore = useUserStore()
-
-// 操作矩阵：不可操作超管；管理员之间不可互相操作（与后端一致）
 const canOperate = row => {
   if (row.role === 'super') return false
   if (row.role === 'admin' && !userStore.isSuper) return false
@@ -302,8 +294,6 @@ const removeUser = async row => {
 }
 
 const data = ref(null)
-
-// 漏斗可视化数据
 const funnelStages = computed(() => {
   const f = data.value?.funnel
   if (!f) return []
@@ -331,7 +321,7 @@ const loadAiMode = async () => {
     const d = await apiAiMode()
     aiMode.value = d.provider
     aiAvailable.value = d.available
-  } catch (e) { /* 忽略 */ }
+  } catch (e) {  }
 }
 
 const switchAiMode = async provider => {
@@ -362,8 +352,6 @@ onMounted(async () => {
     else if (e.code !== -1) ElMessage.error(e.message)
   }
 })
-
-// ---------- 套餐配置 ----------
 const packages = ref([])
 const pkgVisible = ref(false)
 const pkgSaving = ref(false)
@@ -426,8 +414,6 @@ const loadOrders = async () => {
   } catch (e) { if (e.code !== -1 && e.code !== 403) ElMessage.error(e.message) }
   finally { loadingOrders.value = false }
 }
-
-// 订单列表内一键退款
 const refundRow = async row => {
   try {
     await ElMessageBox.confirm(
@@ -441,8 +427,6 @@ const refundRow = async row => {
     if (e !== 'cancel' && e?.message && e?.code !== -1) ElMessage.error(e.message)
   }
 }
-
-// 删除违规生成内容
 const removeGen = async g => {
   try {
     await ElMessageBox.confirm(`确认删除 ${g.email} 的该条生成内容？图片文件将一并删除，不可恢复。`, '删除违规内容', { type: 'error' })
@@ -482,7 +466,7 @@ const toggleBan = async row => {
     await apiAdminBan(row.id, !row.banned)
     ElMessage.success('操作成功')
     loadUsers()
-  } catch (e) { /* cancel */ }
+  } catch (e) {  }
 }
 </script>
 

@@ -7,8 +7,7 @@
     </div>
 
     <div class="grid">
-      <!-- 左：图片列表 -->
-      <div class="mk-card">
+            <div class="mk-card">
         <div class="panel-title"><el-icon><UploadFilled /></el-icon> 图片列表（{{ files.length }}/20）</div>
         <div class="file-grid">
           <div v-for="(f, i) in files" :key="f.fileId" class="file-cell">
@@ -23,8 +22,7 @@
         <el-progress v-if="uploading" :percentage="upPercent" :stroke-width="6" style="margin-top:10px" />
       </div>
 
-      <!-- 右：参数与结果 -->
-      <div class="mk-card">
+            <div class="mk-card">
         <div class="panel-title"><el-icon><Operation /></el-icon> 统一参数</div>
         <div class="param-label">氛围风格</div>
         <el-select v-model="params.style" style="width:100%">
@@ -124,7 +122,7 @@ const run = async () => {
           ElMessage.success(`批量完成：成功${data.list.filter(i => i.status === 'success').length}张`)
           notifyDone('批量生成已完成')
         }
-      } catch (e) { /* 忽略 */ }
+      } catch (e) {  }
     }, 2000)
   } catch (e) {
     running.value = false

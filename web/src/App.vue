@@ -98,7 +98,6 @@ const onCommand = cmd => {
   gap: 28px;
 }
 
-/* 移动端：logo缩短、导航横向滚动、隐藏昵称 */
 @media (max-width: 768px) {
   .header-inner { gap: 10px; padding: 0 10px; }
   .logo span { display: none; }

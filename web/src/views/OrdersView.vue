@@ -3,8 +3,7 @@
     <div class="page-title"><el-icon class="mk-gradient-text"><Tickets /></el-icon> 订单与消费明细</div>
 
     <el-tabs v-model="tab">
-      <!-- 充值订单 -->
-      <el-tab-pane label="充值订单" name="orders">
+            <el-tab-pane label="充值订单" name="orders">
         <div class="mk-card">
           <el-table :data="orders" v-loading="loadingOrders" empty-text="暂无订单">
             <el-table-column prop="id" label="订单号" min-width="180" />
@@ -30,8 +29,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 算力明细 -->
-      <el-tab-pane label="算力明细" name="logs">
+            <el-tab-pane label="算力明细" name="logs">
         <div class="mk-card">
           <el-table :data="logs" v-loading="loadingLogs" empty-text="暂无明细">
             <el-table-column label="类型" width="110">

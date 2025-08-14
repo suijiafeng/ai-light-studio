@@ -1,14 +1,6 @@
 const { v4: uuid } = require('uuid');
 const db = require('../db');
 
-/**
- * 变更用户算力并写流水（事务）
- * @param {string} userId
- * @param {number} change 正数增加 / 负数扣减
- * @param {string} type register|recharge|consume|refund
- * @param {string} remark
- * @returns {number} 变更后余额
- */
 const changeCredits = db.transaction((userId, change, type, remark) => {
   const user = db.prepare('SELECT credits FROM users WHERE id = ?').get(userId);
   if (!user) throw new Error('用户不存在');
@@ -25,10 +17,6 @@ const changeCredits = db.transaction((userId, change, type, remark) => {
   return balance;
 });
 
-/**
- * 是否享受高清无水印：会员 或 有任意已支付订单（单条SQL）
- * 从 routes/generate.js 搬迁至此，供普通生成与工作流引擎共用同一份判定逻辑。
- */
 function isPremium(userId) {
   const row = db.prepare(`
     SELECT (

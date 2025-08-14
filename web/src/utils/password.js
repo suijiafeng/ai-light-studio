@@ -1,13 +1,9 @@
-/**
- * 密码策略（与后端保持一致）：8-32位，必须包含字母和数字
- */
 export const PASSWORD_RULE_MSG = '密码需8-32位，且同时包含字母和数字'
 
 export function isValidPassword(pwd) {
   return typeof pwd === 'string' && pwd.length >= 8 && pwd.length <= 32 && /[a-zA-Z]/.test(pwd) && /\d/.test(pwd)
 }
 
-/** 强度评估：返回 { score:0-4, label, color, percent } */
 export function passwordStrength(pwd) {
   if (!pwd) return { score: 0, label: '', color: '', percent: 0 }
   let score = 0

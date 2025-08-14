@@ -1,7 +1,6 @@
 <template>
   <div class="wf-page">
-    <!-- 顶部工具条 -->
-    <div class="wf-bar">
+        <div class="wf-bar">
       <el-button text @click="$router.push('/workflows')"><el-icon><ArrowLeft /></el-icon>返回</el-button>
       <input v-model="name" class="wf-name" placeholder="未命名工作流" maxlength="60" />
       <div class="wf-bar-spacer"></div>
@@ -12,11 +11,9 @@
     </div>
 
     <div class="wf-main">
-      <!-- 左：节点面板 -->
-      <aside class="wf-side wf-left"><NodePalette /></aside>
+            <aside class="wf-side wf-left"><NodePalette /></aside>
 
-      <!-- 中：画布 -->
-      <div class="wf-canvas" @drop="onDrop" @dragover="onDragOver">
+            <div class="wf-canvas" @drop="onDrop" @dragover="onDragOver">
         <VueFlow
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1 }"
@@ -52,8 +49,7 @@
         />
       </div>
 
-      <!-- 右：属性面板 -->
-      <aside class="wf-side wf-right">
+            <aside class="wf-side wf-right">
         <NodeInspector :node="selectedNode" :readonly="running" @delete="deleteNode" />
       </aside>
     </div>
@@ -108,31 +104,20 @@ let loading = false // 载入期间抑制 dirty
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) : null))
 const empty = ref(true)
 const refreshEmpty = () => { empty.value = getNodes.value.length === 0 }
-
-// 只负责空态刷新；真正的“是否脏”交给下面基于内容签名的 watch([getNodes, getEdges]) 统一判定
-// （不能在这里无条件置脏——VueFlow 自身的内部事件，如初次渲染后的节点尺寸测量，也会触发
-// nodes-change，若这里直接置 dirty=true，会导致刚打开一个未做任何编辑的工作流就显示“未保存”）
 const markDirty = () => { if (!loading) refreshEmpty() }
-
-// ---------- 选中 ----------
 onNodeClick(({ node }) => { selectedId.value = node.id })
 onPaneClick(() => { selectedId.value = '' })
-
-// ---------- 连线校验 ----------
 onConnect(conn => {
   if (conn.source === conn.target) return
   const src = findNode(conn.source), tgt = findNode(conn.target)
   if (!src || !tgt || !canConnect(src.type, tgt.type)) {
     return ElMessage.warning('这两个节点的接口类型不匹配，无法连接')
   }
-  // 单输入：目标已有入边则先移除旧连线
   const dup = getEdges.value.filter(e => e.target === conn.target)
   if (dup.length) setEdges(getEdges.value.filter(e => e.target !== conn.target))
   addEdges([{ ...conn, animated: true }])
   dirty.value = true
 })
-
-// ---------- 拖拽落节点 ----------
 const onDragOver = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
 const onDrop = e => {
   e.preventDefault()
@@ -148,9 +133,6 @@ const onDrop = e => {
 }
 
 const deleteNode = id => {
-  // 运行期画布必须真正只读：Delete 键已通过 :delete-key-code="running ? null : 'Delete'" 挡住，
-  // 但 NodeInspector 的“删除”按钮走的是这个函数，同样需要拦截，否则运行中删除的节点会和后端
-  // 正在跑的那份 graph_snapshot 快照对不上，RunPanel 里的状态圆点会指向一个已经不存在的节点。
   if (running.value) { ElMessage.warning('运行中无法编辑节点，请先取消运行'); return }
   removeNodes([id])
   if (selectedId.value === id) selectedId.value = ''
@@ -158,9 +140,6 @@ const deleteNode = id => {
   dirty.value = true
   refreshEmpty()
 }
-
-// ---------- 序列化 / 保存 ----------
-// runStatus 是运行期临时展示状态（见 BaseNode.vue），绝不能混入持久化的节点数据
 const buildGraph = () => ({
   version: 1,
   nodes: getNodes.value.map(n => {
@@ -169,9 +148,6 @@ const buildGraph = () => ({
   }),
   edges: getEdges.value.map(e => ({ id: e.id, source: e.source, target: e.target }))
 })
-
-// dirty 的“内容基线”：只对比 buildGraph() 清洗后的内容（不含运行期 runStatus 覆盖层），
-// 见下方 watch([getNodes, getEdges]) 的说明
 let lastGraphSignature = ''
 const captureGraphSignature = () => { lastGraphSignature = JSON.stringify(buildGraph()) }
 
@@ -197,13 +173,15 @@ const save = async () => {
     saving.value = false
   }
 }
-
-// ---------- 载入 ----------
 const loadGraph = g => {
   loading = true
-  setNodes((g.nodes || []).map(n => ({ ...n })))
+  setNodes((g.nodes || []).map(n => ({
+    ...n,
+    ...(n.data?.size?.width && n.data?.size?.height
+      ? { width: n.data.size.width, height: n.data.size.height }
+      : {})
+  })))
   setEdges((g.edges || []).map(e => ({ ...e, animated: true })))
-  // 恢复 id 计数器，避免新节点 id 撞车
   let max = 0
   for (const n of g.nodes || []) {
     const m = /-(\d+)$/.exec(n.id)
@@ -231,13 +209,7 @@ onMounted(async () => {
 
 watch(name, () => { if (!loading) dirty.value = true })
 
-// =====================================================================
-// ---------- 运行：预估成本 / 触发运行 / SSE 订阅（轮询兜底）/ 取消 ----------
-// =====================================================================
-
 const nodeCount = computed(() => getNodes.value.length)
-
-// ---------- 预估成本（防抖自动刷新） ----------
 const estimate = ref(null)
 const estimating = ref(false)
 let estimateTimer = null
@@ -250,7 +222,6 @@ const refreshEstimate = async () => {
     const data = await apiWorkflowEstimate(wfId.value, buildGraph())
     estimate.value = data.total
   } catch (e) {
-    // 图不合法等情况下静默降级为 “--”，不打断用户编辑
     estimate.value = null
   } finally {
     estimating.value = false
@@ -263,12 +234,6 @@ const scheduleEstimate = () => {
   clearTimeout(estimateTimer)
   estimateTimer = setTimeout(refreshEstimate, 700)
 }
-
-// 节点/连线的任意变化（含 Inspector 中直接修改 node.data 字段，不经过 nodes-change 事件）都需要
-// 重新估算，也需要标脏。不能简单地在这里恒置 dirty=true：运行期间 setNodeRunStatus/resetRunStatuses
-// 会往 node.data 写入临时的 runStatus 展示字段（同样会触发这个 deep watch），那不算真实编辑——
-// 画布在运行期间本来就是只读的（拖拽/连线/删除/Inspector 编辑均已禁用），这里额外跳过 running
-// 期间的签名比对，避免每条 SSE 节点事件都重新 JSON.stringify 一次整张图。
 watch([getNodes, getEdges], () => {
   if (loading || running.value) return
   scheduleEstimate()
@@ -278,23 +243,18 @@ watch([getNodes, getEdges], () => {
     dirty.value = true
   }
 }, { deep: true })
-
-// ---------- 运行状态管理 ----------
 const TERMINAL_RUN_STATUSES = ['success', 'failed', 'canceled']
 const RUN_PHASE_MAP = { pending: 'running', running: 'running', success: 'success', failed: 'failed', canceled: 'canceled' }
 
 const runId = ref('')
 const runPhase = ref('idle') // idle|running|success|failed|canceled
 const running = computed(() => runPhase.value === 'running')
-// 供 BaseNode.vue（图片输入节点的画布内上传/清除交互）注入读取，运行期间禁止再改图片
 provide('wfRunning', running)
 const nodeStatusMap = reactive({}) // nodeId -> { status, error, output }
 const runOutputs = ref([]) // 本次运行最终产物（output 类型节点的结果），来自 done 事件
 let es = null // EventSource
 let pollTimer = null
 let settled = true // 本次运行的终态是否已处理（防止重复退款提示 / 重复 toast）
-// run() 里 await apiWorkflowRun 期间用户可能已经离开页面；组件卸载后绝不能再创建新的
-// EventSource（否则它不会被任何后续的 onBeforeUnmount 关闭，会一直挂到该次运行自然结束为止）
 let unmounted = false
 
 const nodeStatuses = computed(() => getNodes.value.map(n => {
@@ -306,10 +266,6 @@ const nodeStatuses = computed(() => getNodes.value.map(n => {
     error: st?.error || ''
   }
 }))
-
-// extra.output 是节点执行器的产物（如 { image, url }），success/cached 时才会有；
-// 存进 nodeStatusMap 供 RunPanel 用，也写进 data.runStatus 供 BaseNode.vue 在节点卡片上直接
-// 显示生成结果图（而不是只显示一个"成功"角标却看不到图在哪）
 const setNodeRunStatus = (nodeId, status, extra = {}) => {
   if (!findNode(nodeId)) return // 运行期间节点理论上不会被删除，兜底避免报错
   const entry = { status, error: extra.error || '', output: extra.output || null }
@@ -363,7 +319,7 @@ const startPolling = rid => {
       for (const n of nodes || []) setNodeRunStatus(n.nodeId, n.status, { error: n.error, output: n.output })
       if (run?.outputs) runOutputs.value = run.outputs
       if (run?.status && TERMINAL_RUN_STATUSES.includes(run.status)) settleRun(run.status, run.error)
-    } catch (e) { /* 单次轮询失败忽略，等待下一轮 */ }
+    } catch (e) {  }
   }, 1500)
 }
 
@@ -371,9 +327,9 @@ const subscribeRun = rid => {
   closeEventSource()
   clearPollTimer()
   es = new EventSource(apiWorkflowRunEventsUrl(rid))
-  es.addEventListener('snapshot', e => { try { applySnapshot(JSON.parse(e.data)) } catch (err) { /* 忽略解析异常 */ } })
-  es.addEventListener('node', e => { try { applyNodeEvent(JSON.parse(e.data)) } catch (err) { /* 忽略解析异常 */ } })
-  es.addEventListener('done', e => { try { applyDone(JSON.parse(e.data)) } catch (err) { /* 忽略解析异常 */ } })
+  es.addEventListener('snapshot', e => { try { applySnapshot(JSON.parse(e.data)) } catch (err) {  } })
+  es.addEventListener('node', e => { try { applyNodeEvent(JSON.parse(e.data)) } catch (err) {  } })
+  es.addEventListener('done', e => { try { applyDone(JSON.parse(e.data)) } catch (err) {  } })
   es.onerror = () => {
     if (settled) return
     closeEventSource()
@@ -403,10 +359,6 @@ const run = async () => {
   } catch (e) {
     settled = true
     runPhase.value = 'idle'
-    // /run 的 429 有两种来源：算力不足（changeCredits 抛出）与请求过于频繁（wfRunLimit 限流），
-    // 两者 HTTP/code 都是 429 但语义完全不同，必须靠 message 区分，不能一律当成“算力不足”弹窗，
-    // 否则用户只是操作快了点也会被引导去充值。routes/workflow.js 里算力不足的提示文案固定包含
-    // “算力不足”四个字，限流提示文案是“工作流运行请求太频繁，请稍后再试”，据此区分。
     if (e.code === 429 && /算力不足/.test(e.message || '')) {
       ElMessageBox.confirm(e.message || '算力不足，请先充值', '算力不足', {
         confirmButtonText: '去充值', cancelButtonText: '取消', type: 'warning'

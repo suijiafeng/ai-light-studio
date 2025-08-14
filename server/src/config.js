@@ -12,7 +12,6 @@ module.exports = {
   uploadDir: resolve(process.env.UPLOAD_DIR, './data/uploads'),
   resultDir: resolve(process.env.RESULT_DIR, './data/results'),
   adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-  // 超级管理员：唯一最高权限，可授权/封禁/删除管理员
   superAdminEmails: (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
 
   freeCredits: Number(process.env.FREE_CREDITS || 20),
@@ -43,8 +42,6 @@ module.exports = {
     replicateVersion: process.env.REPLICATE_MODEL_VERSION || '',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 180000)
   },
-
-  // LLM灯光顾问（OpenAI兼容接口，未配置时使用内置规则推荐）
   llm: {
     apiKey: process.env.LLM_API_KEY || '',
     baseUrl: process.env.LLM_BASE_URL || 'https://api.openai.com/v1',
@@ -60,8 +57,6 @@ module.exports = {
     apiv3Key: process.env.WXPAY_APIV3_KEY || '',
     notifyUrl: process.env.WXPAY_NOTIFY_URL || ''
   },
-
-  // 充值套餐（可按需调整）
   packages: [
     { id: 'p_10', type: 'credits', title: '体验包', price: 990, credits: 100, desc: '100算力 · 约20次生成' },
     { id: 'p_30', type: 'credits', title: '进阶包', price: 2990, credits: 350, desc: '350算力 · 约70次生成' },

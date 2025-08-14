@@ -5,7 +5,6 @@ import { apiLogin, apiRegister, apiMe } from '@/api'
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    // 本地快照即时水合，避免刷新时头部登录态闪变；fetchMe 会后台刷新为最新
     user: JSON.parse(localStorage.getItem('user_snapshot') || 'null')
   }),
   getters: {

@@ -6,7 +6,6 @@ const { fail } = require('../utils/response');
 const USER_FIELDS = 'id, email, nickname, role, credits, member_expires_at, banned, created_at';
 
 function auth(req, res, next) {
-  // 方式一：开放API密钥（X-API-Key），供第三方系统集成
   const apiKey = req.headers['x-api-key'];
   if (apiKey) {
     const row = db.prepare('SELECT user_id FROM api_keys WHERE key = ? AND revoked = 0').get(String(apiKey));
@@ -18,7 +17,6 @@ function auth(req, res, next) {
     req.viaApiKey = true;
     return next();
   }
-  // 方式二：JWT
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return fail(res, 401, '未登录或登录已过期');

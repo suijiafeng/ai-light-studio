@@ -40,8 +40,7 @@
         </el-form>
       </div>
 
-      <!-- 邀请好友 -->
-      <div class="mk-card">
+            <div class="mk-card">
         <h4><el-icon><Present /></el-icon> 邀请好友 · 双方各得10算力</h4>
         <p class="text-secondary small">好友通过你的邀请链接注册，你和好友各获得10算力奖励</p>
         <el-input :model-value="inviteLink" readonly>
@@ -51,8 +50,7 @@
         </el-input>
       </div>
 
-      <!-- 开放API密钥 -->
-      <div class="mk-card">
+            <div class="mk-card">
         <h4><el-icon><Key /></el-icon> 开放API密钥</h4>
         <p class="text-secondary small">第三方系统携带请求头 <code>X-API-Key</code> 即可调用生成接口，详见接口文档</p>
         <el-table :data="keys" size="small" empty-text="暂无密钥">
@@ -72,8 +70,7 @@
         </el-button>
       </div>
 
-      <!-- 注销账号 -->
-      <div class="mk-card danger-zone">
+            <div class="mk-card danger-zone">
         <h4><el-icon><WarningFilled /></el-icon> 注销账号</h4>
         <p class="text-secondary small">注销后将永久删除账号及全部数据（照片、生成记录、算力、订单），不可恢复。剩余算力不予退还。</p>
         <el-button type="danger" plain size="small" @click="deleteAccount">申请注销账号</el-button>
@@ -112,7 +109,7 @@ onMounted(async () => {
 })
 
 const loadKeys = async () => {
-  try { keys.value = (await apiKeys()).list } catch (e) { /* 忽略 */ }
+  try { keys.value = (await apiKeys()).list } catch (e) {  }
 }
 
 const copyInvite = async () => {
@@ -153,7 +150,7 @@ const revokeKey = async row => {
     await apiRevokeKey(row.id)
     ElMessage.success('已吊销')
     loadKeys()
-  } catch (e) { /* cancel */ }
+  } catch (e) {  }
 }
 
 const saveNickname = async () => {

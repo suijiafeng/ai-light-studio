@@ -106,7 +106,6 @@ const print = () => window.print()
   .paper { box-shadow: none; padding: 0; }
 }
 
-/* REPORT-MOBILE */
 @media (max-width: 640px) {
   .paper { padding: 24px 18px; }
   .imgs { grid-template-columns: 1fr; }

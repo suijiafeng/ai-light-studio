@@ -57,8 +57,6 @@ const templates = [
   { name: '餐厅微醺', icon: 'Coffee', tag: '夜景暖光', desc: '低亮度高氛围，适合餐厅、酒吧', bg: 'linear-gradient(135deg,#e69138,#a64d79)', params: { style: 'night_warm', colorTemp: 2800, brightness: 45, intensity: 70, detail: 50, direction: 'bottom' } },
   { name: '民宿清晨', icon: 'Cloudy', tag: '日间自然光', desc: '柔和自然光感，适合民宿房源照片', bg: 'linear-gradient(135deg,#9fc5e8,#ffe599)', params: { style: 'daylight', colorTemp: 5000, brightness: 58, intensity: 38, detail: 45, direction: 'right' } }
 ]
-
-// 未登录时路由守卫会自动带着完整参数跳登录页，登录后原样回到工作台
 const useTemplate = t => router.push({ path: '/studio', query: { ...t.params } })
 
 const features = [

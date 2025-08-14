@@ -46,8 +46,7 @@
       </el-button>
     </div>
 
-    <!-- 支付二维码弹窗 -->
-    <el-dialog v-model="payVisible" title="微信扫码支付" width="380px" :close-on-click-modal="false" @closed="stopPoll">
+        <el-dialog v-model="payVisible" title="微信扫码支付" width="380px" :close-on-click-modal="false" @closed="stopPoll">
       <div class="pay-dialog">
         <img v-if="qrDataUrl" :src="qrDataUrl" class="qr" alt="支付二维码" />
         <p class="amount">¥ {{ payingOrder?.amountYuan }}</p>
@@ -107,7 +106,6 @@ const createOrder = async () => {
     isMock.value = !!mock
     qrDataUrl.value = await QRCode.toDataURL(codeUrl, { width: 220, margin: 1 })
     payVisible.value = true
-    // 轮询订单状态
     pollTimer = setInterval(async () => {
       try {
         const o = await apiOrderStatus(orderId)
@@ -117,7 +115,7 @@ const createOrder = async () => {
           ElMessage.success(`支付成功，${o.credits}算力已到账！`)
           userStore.fetchMe()
         }
-      } catch (e) { /* 忽略单次轮询失败 */ }
+      } catch (e) {  }
     }, 2000)
   } catch (e) {
     if (e.code !== -1) ElMessage.error(e.message)

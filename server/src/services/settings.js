@@ -1,7 +1,3 @@
-/**
- * 运行时设置（存库，重启不丢失）
- * 当前用于：AI出图模式的运行时切换（演示mock / 真实fal / replicate），无需改.env重启
- */
 const db = require('../db');
 const config = require('../config');
 
@@ -15,7 +11,6 @@ function set(key, value) {
     .run(key, String(value));
 }
 
-/** 当前生效的AI模式：运行时设置优先，其次 .env 的 AI_PROVIDER */
 function currentAiProvider() {
   return get('ai_provider') || config.ai.provider;
 }

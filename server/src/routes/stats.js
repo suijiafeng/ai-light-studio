@@ -7,11 +7,6 @@ const { changeCredits } = require('../services/credits');
 
 const router = express.Router();
 
-/**
- * 操作目标校验：
- * - 任何人不可操作超级管理员
- * - 管理员之间不可互相操作（封禁/调整算力/删除），仅超管可操作管理员
- */
 function canOperate(operator, target) {
   if (target.role === 'super') return { ok: false, msg: '不可操作超级管理员账号' };
   if (['admin'].includes(target.role) && operator.role !== 'super') {
@@ -19,8 +14,6 @@ function canOperate(operator, target) {
   }
   return { ok: true };
 }
-
-// ---------- AI出图模式切换（仅管理员，运行时生效无需重启） ----------
 const settings = require('../services/settings');
 const cfg = require('../config');
 
@@ -45,9 +38,6 @@ router.post('/ai-mode', auth, adminOnly, (req, res) => {
   settings.set('ai_provider', provider);
   return ok(res, { provider }, provider === 'mock' ? '已切换为演示模式（本地模拟出图）' : `已切换为真实出图（${provider}）`);
 });
-
-// ---------- 管理员账号管理（仅超级管理员） ----------
-// 授权/撤销管理员
 router.post('/users/:id/role', auth, superOnly, (req, res) => {
   const { role } = req.body || {};
   if (!['admin', 'user'].includes(role)) return fail(res, 400, '角色仅支持 admin / user');
@@ -57,8 +47,6 @@ router.post('/users/:id/role', auth, superOnly, (req, res) => {
   db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, u.id);
   return ok(res, { role }, role === 'admin' ? '已授权为管理员' : '已撤销管理员权限');
 });
-
-// 删除账号（含管理员；不可删超管）
 router.delete('/users/:id', auth, superOnly, (req, res) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!u) return fail(res, 404, '用户不存在');
@@ -82,8 +70,6 @@ router.delete('/users/:id', auth, superOnly, (req, res) => {
   wipe();
   return ok(res, {}, '账号已删除');
 });
-
-// ---------- 订单管理（仅管理员） ----------
 router.get('/orders', auth, adminOnly, (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(50, Math.max(1, Number(req.query.size) || 15));
@@ -108,8 +94,6 @@ router.get('/orders', auth, adminOnly, (req, res) => {
     }))
   });
 });
-
-// 删除违规生成记录（含结果图与源图文件）
 router.delete('/generations/:id', auth, adminOnly, (req, res) => {
   const g = db.prepare('SELECT * FROM generations WHERE id = ?').get(req.params.id);
   if (!g) return fail(res, 404, '记录不存在');
@@ -117,7 +101,6 @@ router.delete('/generations/:id', auth, adminOnly, (req, res) => {
   const path = require('path');
   const config = require('../config');
   db.prepare('DELETE FROM generations WHERE id = ?').run(g.id);
-  // 结果图直接删；源图可能被其他记录（连拍/再次编辑）引用，无引用时才删
   if (g.result_path) {
     const p = path.join(config.resultDir, g.result_path);
     if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) {} }
@@ -129,8 +112,6 @@ router.delete('/generations/:id', auth, adminOnly, (req, res) => {
   }
   return ok(res, {}, '已删除该生成记录');
 });
-
-// ---------- 用户管理（仅管理员） ----------
 router.get('/users', auth, adminOnly, (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(50, Math.max(1, Number(req.query.size) || 15));
@@ -149,8 +130,6 @@ router.get('/users', auth, adminOnly, (req, res) => {
     }))
   });
 });
-
-// 调整用户算力（正加负减）
 router.post('/users/:id/credits', auth, adminOnly, (req, res) => {
   const { change, remark } = req.body || {};
   const n = Number(change);
@@ -167,8 +146,6 @@ router.post('/users/:id/credits', auth, adminOnly, (req, res) => {
     throw e;
   }
 });
-
-// 封禁/解封
 router.post('/users/:id/ban', auth, adminOnly, (req, res) => {
   const u = db.prepare('SELECT id, banned, role FROM users WHERE id = ?').get(req.params.id);
   if (!u) return fail(res, 404, '用户不存在');
@@ -178,16 +155,12 @@ router.post('/users/:id/ban', auth, adminOnly, (req, res) => {
   db.prepare('UPDATE users SET banned = ? WHERE id = ?').run(banned, u.id);
   return ok(res, { banned: !!banned }, banned ? '已封禁' : '已解封');
 });
-
-// 错误日志（排查线上问题）
 router.get('/errors', auth, adminOnly, (req, res) => {
   const rows = db.prepare('SELECT * FROM error_logs ORDER BY created_at DESC LIMIT 100').all();
   return ok(res, {
     list: rows.map(r => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, url: r.url, createdAt: r.created_at }))
   });
 });
-
-// 最近生成内容（抽查）
 router.get('/generations', auth, adminOnly, (req, res) => {
   const rows = db.prepare(`
     SELECT g.id, g.result_path, g.source_path, g.status, g.cost, g.created_at, u.email
@@ -201,8 +174,6 @@ router.get('/generations', auth, adminOnly, (req, res) => {
     }))
   });
 });
-
-// ---------- 套餐在线配置（仅管理员，替代写死config） ----------
 const pkgRow = r => ({
   id: r.id, type: r.type, title: r.title, price: r.price,
   priceYuan: (r.price / 100).toFixed(2), credits: r.credits, days: r.days,
@@ -218,14 +189,10 @@ function validatePkg(body) {
   if (type === 'member' && (!Number.isInteger(days) || days <= 0)) return '会员套餐需填写有效天数';
   return null;
 }
-
-// 全部套餐（含已下架）
 router.get('/packages', auth, adminOnly, (req, res) => {
   const rows = db.prepare('SELECT * FROM packages ORDER BY sort ASC, rowid ASC').all();
   return ok(res, { list: rows.map(pkgRow) });
 });
-
-// 新建套餐
 router.post('/packages', auth, adminOnly, (req, res) => {
   const errMsg = validatePkg(req.body);
   if (errMsg) return fail(res, 400, errMsg);
@@ -235,8 +202,6 @@ router.post('/packages', auth, adminOnly, (req, res) => {
     .run(id, type, String(title).trim(), price, credits, type === 'member' ? days : 0, desc, sort);
   return ok(res, { id }, '套餐已创建');
 });
-
-// 修改套餐（历史订单不受影响，仅影响后续购买）
 router.put('/packages/:id', auth, adminOnly, (req, res) => {
   const row = db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id);
   if (!row) return fail(res, 404, '套餐不存在');
@@ -247,8 +212,6 @@ router.put('/packages/:id', auth, adminOnly, (req, res) => {
     .run(type, String(title).trim(), price, credits, type === 'member' ? days : 0, desc, sort ?? row.sort, row.id);
   return ok(res, {}, '套餐已更新');
 });
-
-// 上架/下架（不做物理删除，避免历史订单失去引用）
 router.post('/packages/:id/toggle', auth, adminOnly, (req, res) => {
   const row = db.prepare('SELECT id, active FROM packages WHERE id = ?').get(req.params.id);
   if (!row) return fail(res, 404, '套餐不存在');
@@ -256,8 +219,6 @@ router.post('/packages/:id/toggle', auth, adminOnly, (req, res) => {
   db.prepare('UPDATE packages SET active = ? WHERE id = ?').run(active, row.id);
   return ok(res, { active: !!active }, active ? '已上架' : '已下架');
 });
-
-// 后台数据总览（仅管理员）
 router.get('/overview', auth, adminOnly, (req, res) => {
   const now = Date.now();
   const dayStart = new Date().setHours(0, 0, 0, 0);
@@ -285,7 +246,6 @@ router.get('/overview', auth, adminOnly, (req, res) => {
       today: db.prepare("SELECT COALESCE(SUM(amount),0) s FROM orders WHERE status = 'paid' AND paid_at >= ?").get(dayStart).s,
       orders: q("SELECT COUNT(*) c FROM orders WHERE status = 'paid'").c
     },
-    // 转化漏斗：注册 → 出过图 → 算力耗尽（余额不够一次生成）→ 付过费
     funnel: (() => {
       const registered = q('SELECT COUNT(*) c FROM users').c;
       const generated = q('SELECT COUNT(DISTINCT user_id) c FROM generations').c;
@@ -298,7 +258,6 @@ router.get('/overview', auth, adminOnly, (req, res) => {
         paidRate: rate(paid, registered)            // 注册→付费
       };
     })(),
-    // 近7天趋势
     trend: [...Array(7)].map((_, i) => {
       const start = dayStart - (6 - i) * 86400000;
       const end = start + 86400000;

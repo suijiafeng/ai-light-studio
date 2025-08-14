@@ -1,6 +1,3 @@
-/**
- * Express 应用（不含监听），便于单元测试直接引入
- */
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -18,8 +15,6 @@ const { fail, ok } = require('./utils/response');
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-
-// 静态资源：源图 / 生成结果
 app.use('/uploads', express.static(config.uploadDir));
 app.use('/results', express.static(config.resultDir));
 
@@ -31,8 +26,6 @@ app.use('/api/pay', payRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/keys', require('./routes/keys'));
 app.use('/api/workflow', require('./routes/workflow'));
-
-// 前端错误上报（限流防刷）
 const { rateLimit } = require('./middleware/rateLimit');
 const { logError } = require('./services/errlog');
 app.post('/api/log/error', rateLimit({ windowMs: 60000, max: 10, key: 'errlog' }), (req, res) => {
@@ -40,21 +33,13 @@ app.post('/api/log/error', rateLimit({ windowMs: 60000, max: 10, key: 'errlog' }
   if (message) logError({ source: 'web', message, stack, url });
   return ok(res, {});
 });
-
-// 404
 app.use('/api', (req, res) => fail(res, 404, '接口不存在'));
-
-// 生产模式：托管前端打包产物（web/dist）
 const distDir = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
-
-  // HTML属性转义：昵称等用户可控内容注入OG标签前必须转义，防存储型XSS（"><script>…）
   const escapeHtml = s => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-  // 分享页注入OG标签（微信/QQ/微博分享显示卡片预览）
   app.get('/s/:shareId', (req, res) => {
     let html = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
     const g = db.prepare('SELECT * FROM generations WHERE share_id = ?').get(req.params.shareId);
@@ -76,12 +61,11 @@ if (fs.existsSync(distDir)) {
 
   app.get(/^(?!\/api|\/uploads|\/results).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
 }
-
-// 全局错误兜底（落库便于线上排查）
+const IS_PROD = process.env.NODE_ENV === 'production'
 app.use((err, req, res, next) => {
   console.error('[server error]', err);
   logError({ source: 'server', message: err.message, stack: err.stack, url: req.originalUrl, userId: req.user?.id });
-  return fail(res, 500, err.message || '服务异常');
+  return fail(res, 500, IS_PROD ? '服务异常，请稍后重试' : (err.message || '服务异常'));
 });
 
 module.exports = app;

@@ -9,11 +9,8 @@ const { createNativeOrder, decryptNotifyResource, refundOrder } = require('../se
 const { adminOnly } = require('../middleware/auth');
 
 const router = express.Router();
-
-// 订单支付成功统一处理（幂等）
 const settleOrder = db.transaction((orderId, transactionId) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  // 仅 pending 可结算：已 paid（幂等）、refunded/closed（不可复活）一律不再发放算力
   if (!order || order.status !== 'pending') return order;
   db.prepare('UPDATE orders SET status = ?, transaction_id = ?, paid_at = ? WHERE id = ?')
     .run('paid', transactionId || '', Date.now(), orderId);
@@ -34,21 +31,15 @@ const toOrder = o => ({
   payMethod: o.pay_method, transactionId: o.transaction_id,
   createdAt: o.created_at, paidAt: o.paid_at
 });
-
-// 套餐从数据库读取（管理后台可在线配置），config.packages 仅作首次种子
 const toPkg = r => ({
   id: r.id, type: r.type, title: r.title, price: r.price,
   credits: r.credits, days: r.days, desc: r.description,
   priceYuan: (r.price / 100).toFixed(2)
 });
-
-// 会员折扣率（0<d<1 生效，其余一律按不打折）——防止配置缺失/异常算出 NaN 金额打挂下单
 function memberDiscountRate() {
   const d = Number(config.memberDiscount);
   return Number.isFinite(d) && d > 0 && d < 1 ? d : 1;
 }
-
-// 套餐列表
 router.get('/packages', (req, res) => {
   const rows = db.prepare('SELECT * FROM packages WHERE active = 1 ORDER BY sort ASC, rowid ASC').all();
   return ok(res, {
@@ -57,8 +48,6 @@ router.get('/packages', (req, res) => {
     payProvider: config.pay.provider
   });
 });
-
-// 会员购算力包享折扣价（单位分）
 function orderPrice(pkg, userId) {
   const discount = memberDiscountRate();
   if (pkg.type !== 'credits' || discount >= 1) return pkg.price;
@@ -66,8 +55,6 @@ function orderPrice(pkg, userId) {
   const isMember = u?.member_expires_at && u.member_expires_at > Date.now();
   return isMember ? Math.round(pkg.price * discount) : pkg.price;
 }
-
-// 创建充值订单
 router.post('/order', auth, async (req, res) => {
   const row = db.prepare('SELECT * FROM packages WHERE id = ? AND active = 1').get((req.body || {}).packageId || '');
   if (!row) return fail(res, 400, '套餐不存在或已下架');
@@ -85,15 +72,11 @@ router.post('/order', auth, async (req, res) => {
     return fail(res, 500, e.message || '下单失败');
   }
 });
-
-// 查询订单状态（前端轮询）
 router.get('/order/:id', auth, (req, res) => {
   const o = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!o) return fail(res, 404, '订单不存在');
   return ok(res, toOrder(o));
 });
-
-// 订单列表
 router.get('/orders', auth, (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(50, Math.max(1, Number(req.query.size) || 10));
@@ -102,8 +85,6 @@ router.get('/orders', auth, (req, res) => {
     .all(req.user.id, size, (page - 1) * size);
   return ok(res, { total, page, size, list: rows.map(toOrder) });
 });
-
-// 沙箱模拟支付成功（仅 PAY_PROVIDER=mock 时可用）
 router.post('/mock/:id', auth, (req, res) => {
   if (config.pay.provider !== 'mock') return fail(res, 403, '当前为真实支付模式，模拟支付不可用');
   const o = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
@@ -113,8 +94,6 @@ router.post('/mock/:id', auth, (req, res) => {
   const settled = settleOrder(o.id, `MOCK${Date.now()}`);
   return ok(res, toOrder(settled), '模拟支付成功');
 });
-
-// 订单退款（仅管理员）：原路退款 + 扣回算力 + 回收会员时长
 router.post('/refund/:id', auth, adminOnly, async (req, res) => {
   const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!o) return fail(res, 404, '订单不存在');
@@ -139,8 +118,6 @@ router.post('/refund/:id', auth, adminOnly, async (req, res) => {
     return fail(res, 500, e.message || '退款失败');
   }
 });
-
-// 微信支付结果回调（V3）
 router.post('/notify', (req, res) => {
   try {
     const body = req.body || {};

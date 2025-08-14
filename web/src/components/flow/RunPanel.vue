@@ -16,19 +16,17 @@
       </span>
     </div>
 
-    <!-- 运行成功后的产物：直接给缩略图+下载，回答"生成的图片在哪"，不用去猜 -->
-    <div v-if="runPhase === 'success' && results.length" class="rp-results">
-      <a
+        <div v-if="runPhase === 'success' && results.length" class="rp-results">
+      <el-image
         v-for="(r, i) in results"
         :key="r.nodeId || i"
-        :href="r.url"
-        target="_blank"
-        rel="noopener"
         class="rp-result-thumb"
-        title="点击查看/下载原图"
-      >
-        <img :src="r.url" alt="生成结果" />
-      </a>
+        :src="r.url"
+        fit="contain"
+        :preview-src-list="results.map(x => x.url)"
+        :initial-index="i"
+        preview-teleported
+      />
     </div>
 
     <div class="rp-mid">
@@ -104,10 +102,10 @@ const dotTitle = n => `${n.label}：${STATUS_LABEL[n.status] || n.status}${n.err
 .rp-results { display: flex; gap: 6px; flex: none; }
 .rp-result-thumb {
   width: 34px; height: 34px; border-radius: 6px; overflow: hidden; flex: none;
-  border: 1px solid var(--mk-border); display: block; transition: border-color .15s, transform .15s;
+  border: 1px solid var(--mk-border); cursor: zoom-in; background: rgba(0, 0, 0, .12);
+  transition: border-color .15s, transform .15s;
 }
 .rp-result-thumb:hover { border-color: var(--mk-primary); transform: scale(1.08); }
-.rp-result-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .rp-mid { display: flex; flex-direction: column; gap: 1px; min-width: 118px; }
 .rp-cost { font-size: 12.5px; color: var(--mk-text); white-space: nowrap; }

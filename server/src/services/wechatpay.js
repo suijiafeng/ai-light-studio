@@ -1,8 +1,3 @@
-/**
- * 微信支付 V3（Native扫码支付）
- * - provider=wechat：真实对接，需在 .env 配置商户参数与证书
- * - provider=mock：沙箱模拟，生成模拟二维码链接，可用 /api/pay/mock/:orderId 模拟支付成功
- */
 const fs = require('fs');
 const crypto = require('crypto');
 const config = require('../config');
@@ -14,7 +9,6 @@ function getPrivateKey() {
   return fs.readFileSync(config.pay.privateKeyPath, 'utf8');
 }
 
-/** V3 请求签名 */
 function buildAuthHeader(method, urlPath, body) {
   const { mchid, serial } = config.pay;
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -24,10 +18,8 @@ function buildAuthHeader(method, urlPath, body) {
   return `WECHATPAY2-SHA256-RSA2048 mchid="${mchid}",nonce_str="${nonce}",signature="${signature}",timestamp="${timestamp}",serial_no="${serial}"`;
 }
 
-/** 创建Native支付订单，返回 code_url（二维码内容） */
 async function createNativeOrder(order) {
   if (config.pay.provider !== 'wechat') {
-    // 沙箱模拟：返回模拟二维码内容
     return { codeUrl: `weixin://wxpay/bizpayurl?pr=MOCK_${order.id}`, mock: true };
   }
   const urlPath = '/v3/pay/transactions/native';
@@ -55,7 +47,6 @@ async function createNativeOrder(order) {
   return { codeUrl: data.code_url, mock: false };
 }
 
-/** 申请退款（V3），mock模式即时成功 */
 async function refundOrder(order, reason = '用户退款') {
   if (config.pay.provider !== 'wechat') {
     return { refundId: `MOCKRF${Date.now()}`, status: 'SUCCESS', mock: true };
@@ -81,7 +72,6 @@ async function refundOrder(order, reason = '用户退款') {
   return { refundId: data.refund_id, status: data.status, mock: false };
 }
 
-/** 解密回调 resource（AES-256-GCM） */
 function decryptNotifyResource(resource) {
   const { ciphertext, nonce, associated_data } = resource;
   const key = Buffer.from(config.pay.apiv3Key, 'utf8');

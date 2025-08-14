@@ -18,8 +18,20 @@
       <p class="insp-desc">{{ def.desc }}</p>
       <p v-if="readonly" class="insp-readonly-hint">工作流运行中，暂不可编辑</p>
 
-      <!-- 图片输入：上传 -->
-      <div v-if="node.type === 'image-input'" class="insp-upload">
+            <div v-if="runOutput?.url" class="insp-result">
+        <el-image
+          class="insp-result-img"
+          :src="runOutput.url"
+          fit="contain"
+          :preview-src-list="[runOutput.url]"
+          preview-teleported
+        />
+        <a class="insp-result-dl" :href="runOutput.url" target="_blank" rel="noopener" download>
+          <el-icon><Download /></el-icon>&nbsp;下载原图
+        </a>
+      </div>
+
+            <div v-if="node.type === 'image-input'" class="insp-upload">
         <div class="up-preview" v-if="node.data.url">
           <img :src="node.data.url" alt="" />
         </div>
@@ -29,8 +41,7 @@
         <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onFile" />
       </div>
 
-      <!-- schema 驱动字段 -->
-      <div v-for="f in def.fields" :key="f.key" class="insp-field">
+            <div v-for="f in def.fields" :key="f.key" class="insp-field">
         <div class="if-label">
           {{ f.label }}
           <span v-if="f.type === 'slider'" class="if-val">{{ node.data[f.key] }}{{ f.unit || '' }}</span>
@@ -53,8 +64,8 @@
         />
       </div>
 
-      <div v-if="node.type === 'output'" class="insp-note">
-        输出节点用于标记最终产物，无需配置。
+      <div v-if="node.type === 'output' && !runOutput?.url" class="insp-note">
+        输出节点用于标记最终产物，无需配置。运行成功后这里会直接显示生成图。
       </div>
     </template>
   </div>
@@ -63,7 +74,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Pointer, Delete, Upload } from '@element-plus/icons-vue'
+import { Pointer, Delete, Upload, Download } from '@element-plus/icons-vue'
 import * as Icons from '@element-plus/icons-vue'
 import { nodeDef } from './nodeTypes'
 import { apiUpload } from '@/api'
@@ -74,6 +85,10 @@ defineEmits(['delete'])
 
 const def = computed(() => nodeDef(props.node?.type) || { label: '', accent: '#999', fields: [], desc: '' })
 const iconComp = computed(() => Icons[def.value.icon] || Icons.Box)
+const runOutput = computed(() => {
+  const s = props.node?.data?.runStatus
+  return (s && (s.status === 'success' || s.status === 'cached')) ? s.output : null
+})
 
 const fileEl = ref()
 const uploading = ref(false)
@@ -114,6 +129,17 @@ const onFile = async e => {
   font-size: 12px; color: #e6a23c; background: rgba(230, 162, 60, .1);
   padding: 6px 10px; border-radius: 6px; margin: -4px 0 0;
 }
+.insp-result { display: flex; flex-direction: column; gap: 8px; }
+.insp-result-img {
+  width: 100%; height: 220px; border-radius: 8px; overflow: hidden;
+  background: rgba(0, 0, 0, .12); display: block; cursor: zoom-in;
+}
+.insp-result-dl {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font-size: 12.5px; font-weight: 600; color: var(--mk-primary); text-decoration: none;
+  padding: 7px; border: 1px solid var(--mk-border); border-radius: 6px; transition: border-color .15s;
+}
+.insp-result-dl:hover { border-color: var(--mk-primary); }
 .insp-upload { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .up-preview { width: 100%; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, .12); }
 .up-preview img { width: 100%; height: 100%; object-fit: contain; }

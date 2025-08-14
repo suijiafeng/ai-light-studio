@@ -1,22 +1,13 @@
-/**
- * AI 灯光重绘服务
- * - provider=replicate：对接 Replicate 上的 IC-Light 模型（填入 .env 即生效）
- * - provider=mock：本地图像处理模拟灯光效果（无需密钥，保证全流程可跑通）
- */
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const config = require('../config');
-
-// 灯光风格预设
 const STYLE_PRESETS = {
   night_warm:  { name: '夜景暖光',  temp: 3000, brightness: 0.85, saturation: 1.12, prompt: 'warm cozy evening interior lighting, soft golden lamps, night ambience' },
   daylight:    { name: '日间自然光', temp: 5600, brightness: 1.12, saturation: 1.02, prompt: 'bright natural daylight interior, sunlight through windows, airy and fresh' },
   office_cool: { name: '办公冷光',  temp: 6500, brightness: 1.08, saturation: 0.92, prompt: 'cool white office lighting, even bright illumination, professional workspace' },
   wall_wash:   { name: '氛围洗墙光', temp: 3500, brightness: 0.92, saturation: 1.18, prompt: 'dramatic wall washer accent lighting, ambient gradient glow on walls, moody interior' }
 };
-
-// 光源方向预设：径向渐变中心位置（mock）与提示词（replicate）
 const DIRECTIONS = {
   none:   { cx: '50%', cy: '30%', prompt: 'ambient light' },
   left:   { cx: '5%',  cy: '45%', prompt: 'light coming from the left side' },
@@ -24,8 +15,6 @@ const DIRECTIONS = {
   top:    { cx: '50%', cy: '0%',  prompt: 'light coming from above, ceiling light' },
   bottom: { cx: '50%', cy: '100%', prompt: 'light coming from below, floor uplight' }
 };
-
-// 色温(K) → RGB 近似（Tanner Helland 算法）
 function kelvinToRGB(kelvin) {
   const t = Math.min(Math.max(kelvin, 1000), 40000) / 100;
   let r, g, b;
@@ -42,9 +31,6 @@ function kelvinToRGB(kelvin) {
   return { r: clamp(r), g: clamp(g), b: clamp(b) };
 }
 
-/**
- * 本地模拟灯光重绘：色温着色 + 亮度 + 饱和度 + 光影gamma + 暗角氛围
- */
 async function mockRelight(sourcePath, params, outPath) {
   const style = STYLE_PRESETS[params.style] || STYLE_PRESETS.night_warm;
   const num = (v, def) => { const n = Number(v); return Number.isFinite(n) ? n : def; };
@@ -59,8 +45,6 @@ async function mockRelight(sourcePath, params, outPath) {
   const img = sharp(sourcePath).rotate();
   const meta = await img.metadata();
   const w = meta.width || 1024, h = meta.height || 768;
-
-  // 氛围光渐变叠加层（光源方向 + 洗墙/氛围感）
   const glowOpacity = (0.10 + intensity * 0.25).toFixed(3);
   const overlay = Buffer.from(
     `<svg width="${w}" height="${h}">
@@ -89,15 +73,10 @@ async function mockRelight(sourcePath, params, outPath) {
     .composite([{ input: overlay, blend: 'over' }])
     .jpeg({ quality: 92 })
     .toFile(outPath);
-
-  // 模拟AI生成耗时
   await new Promise(r => setTimeout(r, 1200 + Math.random() * 1500));
   return outPath;
 }
 
-/**
- * Replicate IC-Light 出图
- */
 async function replicateRelight(sourcePath, params, outPath) {
   const { replicateToken, replicateVersion, timeoutMs } = config.ai;
   if (!replicateToken || !replicateVersion) {
@@ -150,10 +129,6 @@ async function replicateRelight(sourcePath, params, outPath) {
   return outPath;
 }
 
-/**
- * fal.ai IC-Light V2 出图（队列模式：提交→轮询→下载）
- * .env 配置 FAL_API_KEY 后，后台切换到"真实出图(fal)"即生效
- */
 async function falRelight(sourcePath, params, outPath) {
   const { falKey, falModel, timeoutMs } = config.ai;
   if (!falKey) throw new Error('fal.ai 未配置：请在 .env 中填写 FAL_API_KEY');
@@ -170,8 +145,6 @@ async function falRelight(sourcePath, params, outPath) {
 
   const imgBuf = fs.readFileSync(sourcePath);
   const dataUri = `data:image/${path.extname(sourcePath).slice(1).replace('jpg', 'jpeg') || 'jpeg'};base64,${imgBuf.toString('base64')}`;
-
-  // 1) 提交队列任务
   const submit = await fetch(`https://queue.fal.run/${falModel}`, {
     method: 'POST',
     headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
@@ -185,8 +158,6 @@ async function falRelight(sourcePath, params, outPath) {
   const job = await submit.json();
   const statusUrl = job.status_url || `https://queue.fal.run/${falModel}/requests/${job.request_id}/status`;
   const resultUrl = job.response_url || `https://queue.fal.run/${falModel}/requests/${job.request_id}`;
-
-  // 2) 轮询状态
   const deadline = Date.now() + timeoutMs;
   while (true) {
     if (Date.now() > deadline) throw new Error('AI生成超时，请重试');
@@ -195,8 +166,6 @@ async function falRelight(sourcePath, params, outPath) {
     if (st.status === 'COMPLETED') break;
     if (st.status === 'FAILED' || st.status === 'ERROR') throw new Error(`AI生成失败: ${st.error || st.status}`);
   }
-
-  // 3) 取结果并下载
   const result = await (await fetch(resultUrl, { headers: { Authorization: `Key ${falKey}` } })).json();
   const imageUrl = result.images?.[0]?.url || result.image?.url;
   if (!imageUrl) throw new Error('fal 返回结果中没有图片');
@@ -206,9 +175,6 @@ async function falRelight(sourcePath, params, outPath) {
   return outPath;
 }
 
-/**
- * 出图后处理：付费/会员高清无水印，免费版限清+水印
- */
 async function finalizeImage(outPath, premium) {
   const config2 = require('../config');
   const maxSize = premium ? config2.premiumMaxSize : config2.freeMaxSize;
@@ -218,7 +184,6 @@ async function finalizeImage(outPath, premium) {
     img = img.resize(maxSize, maxSize, { fit: 'inside' });
   }
   if (!premium) {
-    // 半透明水印（右下角 + 居中斜排）
     const buf = await img.toBuffer();
     const m = await sharp(buf).metadata();
     const w = m.width, h = m.height;
@@ -238,9 +203,6 @@ async function finalizeImage(outPath, premium) {
   return outPath;
 }
 
-/**
- * 局部重绘：用蒙版将重绘结果与原图融合（白色区域=应用新灯光，黑色=保留原图）
- */
 async function applyMask(sourcePath, outPath, maskPath) {
   const relitBuf = fs.readFileSync(outPath);
   const m = await sharp(relitBuf).metadata();
@@ -259,7 +221,6 @@ async function applyMask(sourcePath, outPath, maskPath) {
 }
 
 async function relight(sourcePath, params, outPath, options = {}) {
-  // 模式由运行时设置决定（后台可切换），其次读 .env
   const { currentAiProvider } = require('./settings');
   const provider = currentAiProvider();
   if (provider === 'fal') {

@@ -46,8 +46,7 @@
       </div>
     </div>
 
-    <!-- 找回密码弹窗 -->
-    <el-dialog v-model="resetVisible" title="找回密码" width="380px">
+        <el-dialog v-model="resetVisible" title="找回密码" width="380px">
       <el-form label-position="top" size="large">
         <el-form-item label="邮箱">
           <el-input v-model="reset.email" placeholder="注册邮箱" maxlength="60" :prefix-icon="Message" />
@@ -70,8 +69,7 @@
       </template>
     </el-dialog>
 
-    <!-- 用户协议 / 隐私政策 弹窗（长文可滚动） -->
-    <el-dialog v-model="legalVisible" title="协议与隐私" width="640px" class="legal-dialog">
+        <el-dialog v-model="legalVisible" title="协议与隐私" width="640px" class="legal-dialog">
       <div class="legal-scroll">
         <LegalDocs :initial-tab="legalTab" require-confirm @confirm-change="v => legalConfirm = v" />
       </div>
@@ -104,12 +102,7 @@ const userStore = useUserStore()
 const isRegister = ref(!!route.query.invite) // 带邀请码进入默认展示注册
 const shake = ref(false)
 let shakeTimer = null
-
-// 未登录访问受保护页被重定向过来：提示 + 面板抖动
-// 用 watch 而非 onMounted：已停留在登录页时再点其他受保护菜单也会触发
 const triggerShake = () => {
-  // ElMessage.warning('请先登录后再访问')
-  // 先移除类再加回，保证连续触发时动画能重新播放
   shake.value = false
   clearTimeout(shakeTimer)
   requestAnimationFrame(() => {
@@ -126,8 +119,6 @@ const loading = ref(false)
 const formRef = ref()
 const form = reactive({ email: '', password: '', nickname: '', confirmPassword: '', code: '' })
 const strength = computed(() => passwordStrength(form.password))
-
-// 清空登录/注册表单及其临时态（切换视图时调用，避免残留敏感信息）
 const clearForm = () => {
   form.email = ''
   form.password = ''
@@ -138,14 +129,10 @@ const clearForm = () => {
   needCode.value = false
   formRef.value?.clearValidate()
 }
-
-// 登录 <-> 注册 切换：清空表单
 const toggleMode = () => {
   isRegister.value = !isRegister.value
   clearForm()
 }
-
-// 打开找回密码弹窗：清空主表单与弹窗表单
 const openReset = () => {
   clearForm()
   reset.email = ''
@@ -153,8 +140,6 @@ const openReset = () => {
   reset.newPassword = ''
   resetVisible.value = true
 }
-
-// 注册邮箱验证码（管理员邮箱或 EMAIL_VERIFY=on 时后端要求）
 const needCode = ref(false)
 const sendingRegCode = ref(false)
 const regCountdown = ref(0)
@@ -202,8 +187,6 @@ const rules = {
       }, trigger: 'blur' }
   ]
 }
-
-// ---------- 找回密码 ----------
 const resetVisible = ref(false)
 const reset = reactive({ email: '', code: '', newPassword: '' })
 const sendingCode = ref(false)
@@ -256,7 +239,6 @@ const openLegal = tab => { legalTab.value = tab; legalVisible.value = true }
 const submit = async () => {
   await formRef.value.validate()
   if (isRegister.value && !agreed.value) return ElMessage.warning('请先阅读并勾选同意用户协议与隐私政策')
-  // 需验证码但未填：提示先获取
   if (isRegister.value && needCode.value && !form.code) {
     return ElMessage.warning('该邮箱需邮箱验证码，请点击“获取验证码”')
   }
@@ -265,7 +247,6 @@ const submit = async () => {
     if (isRegister.value) {
       await apiRegister({ ...form, inviteCode: route.query.invite || undefined })
       ElMessage.success('注册成功，已赠送免费算力，请登录')
-      // 切换到登录并预填邮箱，密码留给用户自行输入
       isRegister.value = false
       form.password = ''
       form.confirmPassword = ''
@@ -279,7 +260,6 @@ const submit = async () => {
     }
     router.push(route.query.redirect || '/studio')
   } catch (e) {
-    // 后端要求邮箱验证码：自动展开验证码输入并引导获取
     if (isRegister.value && /验证码/.test(e.message || '') && !needCode.value) {
       needCode.value = true
       ElMessage.info('该邮箱为管理员/受保护邮箱，请获取邮箱验证码后完成注册')

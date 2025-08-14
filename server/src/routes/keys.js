@@ -1,7 +1,3 @@
-/**
- * 开放API密钥管理
- * 第三方系统携带请求头 X-API-Key 即可调用 /api/generate 系列接口
- */
 const express = require('express');
 const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
@@ -31,7 +27,6 @@ router.post('/', auth, (req, res) => {
   const id = uuid();
   db.prepare('INSERT INTO api_keys (id, user_id, key, name, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(id, req.user.id, key, String(req.body?.name || '默认密钥').slice(0, 30), Date.now());
-  // 完整密钥仅在创建时返回一次
   return ok(res, { id, key }, '创建成功，请立即保存密钥（仅显示一次）');
 });
 
