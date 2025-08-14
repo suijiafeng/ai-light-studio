@@ -5,6 +5,13 @@ import path from 'path'
 // 统一代理，彻底解决开发环境请求异常/URL拼接问题
 export default defineConfig({
   plugins: [vue()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler'
+      }
+    }
+  },
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') }
   },

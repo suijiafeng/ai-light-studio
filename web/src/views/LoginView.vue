@@ -12,36 +12,14 @@
           <el-input v-model="form.email" placeholder="请输入邮箱" maxlength="60" :prefix-icon="Message" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" :type="showPwd ? 'text' : 'password'" placeholder="8-32位，含字母和数字" maxlength="32" :prefix-icon="Lock">
-            <template #suffix>
-              <el-icon
-                class="eye"
-                @mousedown.prevent="showPwd = true"
-                @mouseup="showPwd = false"
-                @mouseleave="showPwd = false"
-                @touchstart.prevent="showPwd = true"
-                @touchend="showPwd = false"
-              ><View v-if="showPwd" /><Hide v-else /></el-icon>
-            </template>
-          </el-input>
+          <PasswordInput v-model="form.password" placeholder="8-32位，含字母和数字" />
           <div v-if="isRegister && form.password" class="pwd-meter">
             <div class="pm-track"><div class="pm-bar" :style="{ width: strength.percent + '%', background: strength.color }"></div></div>
             <span class="pm-label" :style="{ color: strength.color }">{{ strength.label }}</span>
           </div>
         </el-form-item>
         <el-form-item v-if="isRegister" label="确认密码" prop="confirmPassword">
-          <el-input v-model="form.confirmPassword" :type="showPwd2 ? 'text' : 'password'" placeholder="再次输入密码" maxlength="32" :prefix-icon="Lock">
-            <template #suffix>
-              <el-icon
-                class="eye"
-                @mousedown.prevent="showPwd2 = true"
-                @mouseup="showPwd2 = false"
-                @mouseleave="showPwd2 = false"
-                @touchstart.prevent="showPwd2 = true"
-                @touchend="showPwd2 = false"
-              ><View v-if="showPwd2" /><Hide v-else /></el-icon>
-            </template>
-          </el-input>
+          <PasswordInput v-model="form.confirmPassword" placeholder="再次输入密码" />
         </el-form-item>
         <el-form-item v-if="isRegister && needCode" label="邮箱验证码">
           <div class="code-row">
@@ -63,8 +41,8 @@
 
       <div class="switch text-secondary">
         {{ isRegister ? '已有账号？' : '还没有账号？' }}
-        <el-link type="primary" @click="isRegister = !isRegister">{{ isRegister ? '去登录' : '免费注册' }}</el-link>
-        <el-link v-if="!isRegister" class="forgot" @click="resetVisible = true">忘记密码？</el-link>
+        <el-link type="primary" @click="toggleMode">{{ isRegister ? '去登录' : '免费注册' }}</el-link>
+        <el-link v-if="!isRegister" class="forgot" @click="openReset">忘记密码？</el-link>
       </div>
     </div>
 
@@ -83,7 +61,7 @@
           </div>
         </el-form-item>
         <el-form-item label="新密码">
-          <el-input v-model="reset.newPassword" type="password" show-password placeholder="新密码（8-32位，含字母和数字）" maxlength="32" :prefix-icon="Lock" />
+          <PasswordInput v-model="reset.newPassword" placeholder="新密码（8-32位，含字母和数字）" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -112,9 +90,10 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Message, Lock, View, Hide } from '@element-plus/icons-vue'
+import { User, Message } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import LegalDocs from '@/components/LegalDocs.vue'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { isValidPassword, passwordStrength, PASSWORD_RULE_MSG } from '@/utils/password'
 import { apiSendCode, apiResetPassword, apiRegister } from '@/api'
 
@@ -146,9 +125,34 @@ watch(() => route.fullPath, () => {
 const loading = ref(false)
 const formRef = ref()
 const form = reactive({ email: '', password: '', nickname: '', confirmPassword: '', code: '' })
-const showPwd = ref(false)
 const strength = computed(() => passwordStrength(form.password))
-const showPwd2 = ref(false)
+
+// 清空登录/注册表单及其临时态（切换视图时调用，避免残留敏感信息）
+const clearForm = () => {
+  form.email = ''
+  form.password = ''
+  form.nickname = ''
+  form.confirmPassword = ''
+  form.code = ''
+  agreed.value = false
+  needCode.value = false
+  formRef.value?.clearValidate()
+}
+
+// 登录 <-> 注册 切换：清空表单
+const toggleMode = () => {
+  isRegister.value = !isRegister.value
+  clearForm()
+}
+
+// 打开找回密码弹窗：清空主表单与弹窗表单
+const openReset = () => {
+  clearForm()
+  reset.email = ''
+  reset.code = ''
+  reset.newPassword = ''
+  resetVisible.value = true
+}
 
 // 注册邮箱验证码（管理员邮箱或 EMAIL_VERIFY=on 时后端要求）
 const needCode = ref(false)
@@ -308,6 +312,10 @@ const submit = async () => {
   30%, 60%, 90% { transform: translateX(8px); }
 }
 .login-card.shake { animation: login-shake 0.6s ease; }
+@media (max-width: 500px) {
+  .login-page { padding: 20px 14px; align-items: flex-start; padding-top: 8vh; }
+  .login-card { width: 100%; padding: 26px 20px; }
+}
 .legal-scroll {
   max-height: 60vh;
   overflow-y: auto;

@@ -652,4 +652,14 @@ const editResult = async () => {
   .mask-bg { max-width: 100%; max-height: 440px; display: block; user-select: none; }
   .mask-canvas { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
 }
+
+/* STUDIO-MOBILE 移动端优化 */
+@media (max-width: 768px) {
+  .cost-tip { display: block; margin: 6px 0 0; white-space: normal; }
+  .preview-img { min-height: 200px; max-height: 300px; }
+  .style-grid { grid-template-columns: 1fr 1fr; }
+  .dir-row { flex-wrap: wrap; .dir-item { flex: 1 1 30%; } }
+  .batch-grid { grid-template-columns: repeat(2, 1fr); }
+  .source-actions, .result-actions { gap: 6px; }
+}
 </style>

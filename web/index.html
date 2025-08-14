@@ -9,7 +9,12 @@
     document.documentElement.classList.add('boot-lock')
     window.addEventListener('load', () => setTimeout(() => document.documentElement.classList.remove('boot-lock'), 80))
   </script>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 禁止用户双指/双击缩放，viewport-fit覆盖iOS刘海安全区 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0e1016" />
   <title>代码工匠 · AI灯光设计工具</title>
   <meta name="description" content="上传室内实景照片，AI智能重绘空间灯光效果，一键生成多种灯光氛围方案" />
 </head>

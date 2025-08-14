@@ -105,4 +105,11 @@ const print = () => window.print()
   .report { max-width: none; padding: 0; }
   .paper { box-shadow: none; padding: 0; }
 }
+
+/* REPORT-MOBILE */
+@media (max-width: 640px) {
+  .paper { padding: 24px 18px; }
+  .imgs { grid-template-columns: 1fr; }
+  .spec table th { width: 68px; }
+}
 </style>

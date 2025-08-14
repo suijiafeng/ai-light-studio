@@ -43,4 +43,14 @@ window.addEventListener('unhandledrejection', e => {
   reportError(e.reason?.message || e.reason, e.reason?.stack)
 })
 
+// iOS Safari 忽略 user-scalable=no，用JS兜底禁止手势缩放与双击放大
+document.addEventListener('gesturestart', e => e.preventDefault())
+document.addEventListener('gesturechange', e => e.preventDefault())
+let lastTouch = 0
+document.addEventListener('touchend', e => {
+  const now = Date.now()
+  if (now - lastTouch <= 300) e.preventDefault() // 拦截双击放大
+  lastTouch = now
+}, { passive: false })
+
 app.mount('#app')

@@ -31,10 +31,10 @@
         <h4>修改密码</h4>
         <el-form label-position="top">
           <el-form-item label="原密码">
-            <el-input v-model="pwd.oldPassword" type="password" show-password placeholder="原密码" maxlength="32" />
+            <PasswordInput v-model="pwd.oldPassword" placeholder="原密码" />
           </el-form-item>
           <el-form-item label="新密码">
-            <el-input v-model="pwd.newPassword" type="password" show-password placeholder="新密码（8-32位，含字母和数字）" maxlength="32" />
+            <PasswordInput v-model="pwd.newPassword" placeholder="新密码（8-32位，含字母和数字）" />
           </el-form-item>
           <el-button type="primary" plain :loading="savingPwd" @click="savePassword">修改密码</el-button>
         </el-form>
@@ -87,6 +87,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { isValidPassword, PASSWORD_RULE_MSG } from '@/utils/password'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { apiUpdateProfile, apiKeys, apiCreateKey, apiRevokeKey, apiDeleteAccount } from '@/api'
 import { useUserStore } from '@/stores/user'
 

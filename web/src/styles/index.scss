@@ -26,6 +26,29 @@ html.dark {
 
 * { box-sizing: border-box; }
 
+/* ================= 移动端基础适配（iOS / Android） ================= */
+html {
+  -webkit-text-size-adjust: 100%;   /* 禁止横竖屏切换时字号突变 */
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; /* 去掉点击时的灰色高亮块 */
+}
+body {
+  overscroll-behavior-y: none;      /* 禁止下拉回弹露出背景 */
+  -webkit-overflow-scrolling: touch;
+}
+/* iOS 会对 font-size < 16px 的输入框自动放大页面，统一到16px杜绝 */
+input, textarea, select, .el-input__inner, .el-textarea__inner {
+  font-size: 16px;
+}
+/* 顶栏与页面底部预留刘海/手势条安全区 */
+.app-header .header-inner { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+.app-main { padding-bottom: env(safe-area-inset-bottom); }
+/* 触控目标最小尺寸，避免误触 */
+@media (max-width: 768px) {
+  .el-button { min-height: 38px; }
+  .el-dropdown-menu__item { min-height: 42px; display: flex; align-items: center; }
+}
+
 /* 首屏与主题切换期间禁用过渡动画：刷新不闪、切换主题所有颜色同步变化 */
 html.boot-lock *, html.boot-lock *::before, html.boot-lock *::after,
 html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
@@ -135,14 +158,26 @@ img { max-width: 100%; }
 
 /* ================= 移动端适配 ================= */
 @media (max-width: 768px) {
-  .page-container { padding: 16px 12px 40px; }
+  .page-container { padding: 16px 12px calc(40px + env(safe-area-inset-bottom)); }
   .page-title { font-size: 18px; flex-wrap: wrap; }
   .mk-card { padding: 14px; }
-  /* 弹窗自适应宽度 */
-  .el-dialog { --el-dialog-width: 92% !important; width: 92% !important; }
-  .el-message-box { width: 86% !important; max-width: 420px; }
-  /* 表格横向滚动 */
+  /* 弹窗接近全屏并预留安全区，长内容可滚动 */
+  .el-dialog {
+    --el-dialog-width: 94% !important; width: 94% !important;
+    margin-top: 8vh !important;
+    max-height: 84vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .el-dialog__body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .el-message-box { width: 88% !important; max-width: 420px; }
+  /* 表格横向滚动，不撑破 */
   .el-table { font-size: 12px; }
+  .el-tabs__item { padding: 0 12px; font-size: 14px; }
+  /* 分页在小屏更紧凑 */
+  .el-pagination { justify-content: center; flex-wrap: wrap; }
+  /* 表单标签与输入在窄屏纵向排列已由 label-position=top 处理 */
+}
+@media (max-width: 400px) {
+  .page-title { font-size: 16px; }
 }
 
 /* 打印（方案报告导出PDF）时隐藏应用外壳 */
