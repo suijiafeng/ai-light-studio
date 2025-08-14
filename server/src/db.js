@@ -139,6 +139,61 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+// 节点工作流画布（M1：仅定义存储，执行引擎见后续里程碑）
+db.exec(`
+CREATE TABLE IF NOT EXISTS workflows (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  graph TEXT NOT NULL,
+  thumbnail TEXT,
+  share_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_wf_user ON workflows(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wf_share ON workflows(share_id);
+`);
+
+// 工作流运行记录（M2：执行引擎）
+db.exec(`
+CREATE TABLE IF NOT EXISTS workflow_runs (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  graph_snapshot TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  cost INTEGER NOT NULL DEFAULT 0,
+  outputs TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  FOREIGN KEY(workflow_id) REFERENCES workflows(id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_wfrun_user ON workflow_runs(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS node_runs (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  node_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  cache_key TEXT,
+  output TEXT,
+  cost INTEGER NOT NULL DEFAULT 0,
+  refunded INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  started_at INTEGER,
+  finished_at INTEGER,
+  FOREIGN KEY(run_id) REFERENCES workflow_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_noderun_run ON node_runs(run_id);
+CREATE INDEX IF NOT EXISTS idx_noderun_cache ON node_runs(user_id, cache_key, status);
+`);
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS packages (
   id TEXT PRIMARY KEY,

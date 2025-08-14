@@ -7,9 +7,10 @@ const db = require('../db');
 const config = require('../config');
 const { ok, fail } = require('../utils/response');
 const { auth } = require('../middleware/auth');
-const { changeCredits } = require('../services/credits');
+const { changeCredits, isPremium } = require('../services/credits');
 const { relight, STYLE_PRESETS, DIRECTIONS } = require('../services/ai');
 const { rateLimit } = require('../middleware/rateLimit');
+const { enqueueGen } = require('../services/genQueue');
 
 const router = express.Router();
 const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: '生成请求太频繁，请稍后再试' });
@@ -29,37 +30,6 @@ const genLimit = rateLimit({ windowMs: 60 * 1000, max: 30, key: 'gen', message: 
   }
   console.log(`ℹ️  已清理 ${stale.length} 个中断的生成任务，退还 ${refunded} 笔算力`);
 })();
-
-// ---------- 轻量并发队列：限制同时出图数，防止批量任务打满 CPU/外部 API ----------
-const MAX_CONCURRENT = Math.max(1, Number(process.env.GEN_CONCURRENCY || 3));
-let running = 0;
-const pending = [];
-function enqueue(task) {
-  return new Promise((resolve, reject) => {
-    pending.push({ task, resolve, reject });
-    drainQueue();
-  });
-}
-function drainQueue() {
-  while (running < MAX_CONCURRENT && pending.length) {
-    const { task, resolve, reject } = pending.shift();
-    running++;
-    Promise.resolve()
-      .then(task)
-      .then(resolve, reject)
-      .finally(() => { running--; drainQueue(); });
-  }
-}
-
-// 是否享受高清无水印：会员 或 有任意已支付订单（单条SQL）
-function isPremium(userId) {
-  const row = db.prepare(`
-    SELECT (
-      EXISTS(SELECT 1 FROM users WHERE id = ? AND member_expires_at > ?)
-      OR EXISTS(SELECT 1 FROM orders WHERE user_id = ? AND status = 'paid')
-    ) AS p`).get(userId, Date.now(), userId);
-  return !!row?.p;
-}
 
 // 参数校验，返回错误信息或null
 function validateParams(params) {
@@ -163,7 +133,7 @@ function startJob({ userId, sourcePath, params, cost, premium, batchId = null })
     .run(id, userId, path.basename(sourcePath), JSON.stringify(params), 'processing', cost, Date.now(), batchId, premium ? 1 : 0);
   const outName = `${id}.jpg`;
   const outPath = path.join(config.resultDir, outName);
-  enqueue(() => relight(sourcePath, params, outPath, { premium, maskPath: resolveMask(params) }))
+  enqueueGen(() => relight(sourcePath, params, outPath, { premium, maskPath: resolveMask(params) }))
     .then(() => {
       db.prepare('UPDATE generations SET status = ?, result_path = ?, finished_at = ? WHERE id = ?')
         .run('success', outName, Date.now(), id);

@@ -30,6 +30,7 @@ app.use('/api/credits', creditsRouter);
 app.use('/api/pay', payRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/keys', require('./routes/keys'));
+app.use('/api/workflow', require('./routes/workflow'));
 
 // 前端错误上报（限流防刷）
 const { rateLimit } = require('./middleware/rateLimit');

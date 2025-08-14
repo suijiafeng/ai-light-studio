@@ -25,4 +25,17 @@ const changeCredits = db.transaction((userId, change, type, remark) => {
   return balance;
 });
 
-module.exports = { changeCredits };
+/**
+ * 是否享受高清无水印：会员 或 有任意已支付订单（单条SQL）
+ * 从 routes/generate.js 搬迁至此，供普通生成与工作流引擎共用同一份判定逻辑。
+ */
+function isPremium(userId) {
+  const row = db.prepare(`
+    SELECT (
+      EXISTS(SELECT 1 FROM users WHERE id = ? AND member_expires_at > ?)
+      OR EXISTS(SELECT 1 FROM orders WHERE user_id = ? AND status = 'paid')
+    ) AS p`).get(userId, Date.now(), userId);
+  return !!row?.p;
+}
+
+module.exports = { changeCredits, isPremium };
