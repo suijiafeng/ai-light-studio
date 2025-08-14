@@ -9,6 +9,7 @@
 
         <nav class="nav">
           <router-link to="/studio">工作台</router-link>
+          <router-link to="/workflows">工作流</router-link>
           <router-link to="/history">历史图库</router-link>
           <router-link to="/batch">批量处理</router-link>
           <router-link to="/recharge">充值中心</router-link>
@@ -23,14 +24,14 @@
           </el-tooltip>
 
           <template v-if="userStore.isLogin && userStore.user">
-            <el-tag effect="plain" round class="credits-tag" @click="$router.push('/recharge')">
+            <el-tag effect="plain" class="credits-tag" @click="$router.push('/recharge')">
               <el-icon><Coin /></el-icon>&nbsp;{{ userStore.credits }} 算力
             </el-tag>
             <el-dropdown @command="onCommand">
               <span class="user-chip">
                 <el-avatar :size="30" class="avatar">{{ userStore.user.nickname?.[0]?.toUpperCase() }}</el-avatar>
                 <span class="nickname">{{ userStore.user.nickname }}</span>
-                <el-tag v-if="userStore.isMember" size="small" type="warning" effect="dark" round>会员</el-tag>
+                <el-tag v-if="userStore.isMember" size="small" type="warning" effect="dark">会员</el-tag>
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -41,7 +42,7 @@
               </template>
             </el-dropdown>
           </template>
-          <el-button v-else class="mk-btn-gradient" round @click="$router.push('/login')">登录 / 注册</el-button>
+          <el-button v-else class="mk-btn-gradient" @click="$router.push('/login')">登录 / 注册</el-button>
         </div>
       </div>
     </header>
@@ -84,8 +85,7 @@ const onCommand = cmd => {
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(14px);
-  background: color-mix(in srgb, var(--mk-card) 78%, transparent);
+  background: var(--mk-card);
   border-bottom: 1px solid var(--mk-border);
 }
 .header-inner {
@@ -116,12 +116,14 @@ const onCommand = cmd => {
   .logo-icon { color: var(--mk-primary); }
 }
 .nav {
-  display: flex; gap: 4px; flex: 1;
+  display: flex; gap: 4px; flex: 1; align-items: center; align-self: stretch;
   a {
-    padding: 7px 14px; border-radius: 10px; text-decoration: none;
-    color: var(--mk-text-2); font-size: 14px; transition: all 0.2s;
-    &:hover { color: var(--mk-text); background: rgba(124, 108, 255, 0.10); }
-    &.router-link-active { color: var(--mk-primary); background: rgba(124, 108, 255, 0.14); font-weight: 600; }
+    display: flex; align-items: center; height: 100%;
+    padding: 0 14px; text-decoration: none; box-sizing: border-box;
+    color: var(--mk-text-2); font-size: 14px; font-weight: 500;
+    border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+    &:hover { color: var(--mk-text); }
+    &.router-link-active { color: var(--mk-primary); border-color: var(--mk-primary); font-weight: 600; }
   }
 }
 .header-right { display: flex; align-items: center; gap: 12px; }

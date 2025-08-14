@@ -1,16 +1,24 @@
-/* ================= Mokika 现代视觉风格 · 全局主题规范 ================= */
+/* ================= ProSaaS Corporate · 企业级视觉规范 =================
+ * 参考 /Users/apple/Downloads/stitch_saas（ProSaaS Corporate / Lumina Design Pro 系列稿）：
+ * 去渐变、去光效、纯色 + 细线边框，企业蓝（#0057c2）为核心色，信息密度优先于装饰。
+ * --mk-gradient 保留变量名（避免逐处修改模板里的 .mk-btn-gradient/.mk-gradient-text），
+ * 但值改成纯色——组件视觉上自动从"渐变"降级为"纯色"，无需改动任何页面模板。
+ */
 
 :root {
-  --mk-primary: #7c6cff;
-  --mk-primary-2: #4dd0e1;
-  --mk-gradient: linear-gradient(135deg, #7c6cff 0%, #4dd0e1 100%);
-  --mk-radius: 14px;
-  --mk-bg: #f5f6fa;
+  --mk-primary: #0057c2;
+  --mk-primary-2: #0057c2;
+  --mk-gradient: #0057c2;
+  --mk-radius: 8px;
+  --mk-bg: #f5f7fa;
   --mk-card: #ffffff;
-  --mk-border: rgba(0, 0, 0, 0.06);
-  --mk-text: #1f2330;
-  --mk-text-2: #6b7280;
-  --el-color-primary: #7c6cff;
+  --mk-border: #ebedf0;
+  --mk-text: #1c1b1b;
+  --mk-text-2: #414755;
+  --mk-success: #52c41a;
+  --mk-warning: #faad14;
+  --mk-danger: #ff4d4f;
+  --el-color-primary: #0057c2;
 }
 
 html.dark {
@@ -19,7 +27,10 @@ html.dark {
   --mk-border: rgba(255, 255, 255, 0.08);
   --mk-text: #e8eaf2;
   --mk-text-2: #9aa0b3;
-  --el-color-primary: #8b7dff;
+  --mk-success: #52c41a;
+  --mk-warning: #faad14;
+  --mk-danger: #ff4d4f;
+  --el-color-primary: #4d8fe6;
   --el-bg-color: #171a23;
   --el-bg-color-overlay: #1c2030;
 }
@@ -75,26 +86,16 @@ body {
   transition: background 0.3s ease, color 0.3s ease;
 }
 
-html.dark body {
-  background:
-    radial-gradient(1200px 500px at 15% -10%, rgba(124, 108, 255, 0.14), transparent 60%),
-    radial-gradient(1000px 500px at 90% 0%, rgba(77, 208, 225, 0.10), transparent 55%),
-    var(--mk-bg);
-  background-attachment: fixed;
-}
-
-/* 通用卡片 */
+/* 通用卡片：纯色背景 + 1px 细线边框，不用阴影/渐变表达层级（企业级"稳重"基调） */
 .mk-card {
   background: var(--mk-card);
   border: 1px solid var(--mk-border);
   border-radius: var(--mk-radius);
   padding: 20px;
-  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s, background 0.15s;
 }
 .mk-card.hoverable:hover {
-  border-color: rgba(124, 108, 255, 0.45);
-  box-shadow: 0 10px 34px rgba(124, 108, 255, 0.12);
-  transform: translateY(-2px);
+  border-color: var(--mk-primary);
 }
 
 /* 渐变文字 / 渐变按钮 */
@@ -153,7 +154,7 @@ img { max-width: 100%; }
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: rgba(124, 108, 255, 0.35); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(0, 87, 194, 0.25); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ================= 移动端适配 ================= */
@@ -186,8 +187,8 @@ img { max-width: 100%; }
   body, html.dark body { background: #fff !important; }
 }
 
-/* Element Plus 组件圆角统一 */
-.el-button { border-radius: 10px; }
-.el-input__wrapper, .el-textarea__inner { border-radius: 10px; }
+/* Element Plus 组件圆角统一：组件级（按钮/输入框）用 4px，容器级（弹窗/卡片）用 --mk-radius(8px) */
+.el-button { border-radius: 4px; }
+.el-input__wrapper, .el-textarea__inner { border-radius: 4px; }
 .el-dialog { border-radius: var(--mk-radius); }
 .el-card { border-radius: var(--mk-radius); }

@@ -35,7 +35,7 @@
     <div v-else class="gallery">
       <div v-for="item in list" :key="item.id" class="mk-card hoverable item" :class="{ picked: isPicked(item) }">
         <div class="thumb" :class="{ pickable: compareMode && item.status === 'success' }" @click="compareMode ? togglePick(item) : openView(item)">
-          <el-image :src="item.resultUrl || item.sourceUrl" fit="cover" class="img" lazy />
+          <el-image :src="item.resultUrl || item.sourceUrl" fit="contain" class="img" lazy />
           <el-tag v-if="item.status === 'failed'" type="danger" size="small" class="badge">失败</el-tag>
           <el-tag v-else-if="item.status === 'processing'" type="warning" size="small" class="badge">生成中</el-tag>
           <el-tag v-else-if="item.premium" type="warning" size="small" effect="dark" class="badge">2048px·高清</el-tag>
@@ -93,7 +93,7 @@
     <el-dialog v-model="compareVisible" title="方案对比" :width="picked.length > 2 ? '92%' : '760px'" top="6vh">
       <div class="compare-grid" :style="{ gridTemplateColumns: `repeat(${picked.length}, 1fr)` }">
         <div v-for="item in picked" :key="item.id" class="compare-cell">
-          <el-image :src="item.resultUrl" fit="cover" class="compare-img" :preview-src-list="picked.map(p => p.resultUrl)" />
+          <el-image :src="item.resultUrl" fit="contain" class="compare-img" :preview-src-list="picked.map(p => p.resultUrl)" />
           <div class="compare-name">{{ styleName(item.params.style) }}</div>
           <div class="compare-params text-secondary">
             {{ item.params.colorTemp || '-' }}K · 亮度{{ item.params.brightness ?? '-' }} · {{ dirName(item.params.direction) }}
@@ -239,7 +239,7 @@ const remove = async item => {
     position: absolute; top: 8px; left: 8px; width: 26px; height: 26px; border-radius: 50%;
     background: var(--mk-primary); color: #fff; display: flex; align-items: center; justify-content: center;
   }
-  .img { width: 100%; height: 190px; border-radius: 10px; overflow: hidden; display: block; }
+  .img { width: 100%; height: 190px; border-radius: 10px; overflow: hidden; display: block; background: var(--mk-bg); }
   .badge { position: absolute; top: 8px; right: 8px; }
   .meta {
     display: flex; justify-content: space-between; gap: 8px;
@@ -258,7 +258,7 @@ const remove = async item => {
 .compare-tip { font-size: 12px; }
 .compare-grid { display: grid; gap: 14px; }
 .compare-cell {
-  .compare-img { width: 100%; aspect-ratio: 4/3; border-radius: 10px; overflow: hidden; display: block; }
+  .compare-img { width: 100%; aspect-ratio: 4/3; border-radius: 10px; overflow: hidden; display: block; background: var(--mk-bg); }
   .compare-name { font-weight: 700; margin: 8px 0 2px; }
   .compare-params { font-size: 12px; line-height: 1.7; }
 }

@@ -43,7 +43,7 @@ const onMove = e => { if (dragging.value) setPos(e) }
   .img { width: 100%; display: block; }
   .before-clip {
     position: absolute; inset: 0 auto 0 0; overflow: hidden;
-    .before-img { max-width: none; height: 100%; object-fit: cover; }
+    .before-img { max-width: none; height: 100%; object-fit: contain; }
   }
   .handle {
     position: absolute; top: 0; bottom: 0; transform: translateX(-50%); pointer-events: none;

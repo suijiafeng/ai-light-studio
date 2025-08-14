@@ -17,6 +17,14 @@
       </div>
     </section>
 
+    <section class="features page-container">
+      <div v-for="f in features" :key="f.title" class="mk-card hoverable feature">
+        <el-icon :size="30" class="feature-icon"><component :is="f.icon" /></el-icon>
+        <h3>{{ f.title }}</h3>
+        <p class="text-secondary">{{ f.desc }}</p>
+      </div>
+    </section>
+
     <section class="page-container">
       <h2 class="sec-title">灯光方案模板 · 点击即用同款参数</h2>
       <div class="tpl-grid">
@@ -28,14 +36,6 @@
           <p class="text-secondary clamp-2">{{ t.desc }}</p>
           <el-tag size="small" effect="plain" round>{{ t.params.colorTemp }}K · {{ t.tag }}</el-tag>
         </div>
-      </div>
-    </section>
-
-    <section class="features page-container">
-      <div v-for="f in features" :key="f.title" class="mk-card hoverable feature">
-        <el-icon :size="30" class="feature-icon"><component :is="f.icon" /></el-icon>
-        <h3>{{ f.title }}</h3>
-        <p class="text-secondary">{{ f.desc }}</p>
       </div>
     </section>
   </div>

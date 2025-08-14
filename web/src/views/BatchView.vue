@@ -12,7 +12,7 @@
         <div class="panel-title"><el-icon><UploadFilled /></el-icon> 图片列表（{{ files.length }}/20）</div>
         <div class="file-grid">
           <div v-for="(f, i) in files" :key="f.fileId" class="file-cell">
-            <el-image :src="f.url" fit="cover" class="file-img" />
+            <el-image :src="f.url" fit="contain" class="file-img" />
             <el-icon class="del" @click="files.splice(i, 1)"><CircleCloseFilled /></el-icon>
           </div>
           <div v-if="files.length < 20" class="file-add" @click="pick">
@@ -48,7 +48,7 @@
           <div class="panel-title">结果（成功{{ doneCount }}/{{ results.length }}）</div>
           <div class="file-grid">
             <div v-for="r in results" :key="r.id" class="file-cell">
-              <el-image v-if="r.resultUrl" :src="r.resultUrl" fit="cover" class="file-img" :preview-src-list="[r.resultUrl]" />
+              <el-image v-if="r.resultUrl" :src="r.resultUrl" fit="contain" class="file-img" :preview-src-list="[r.resultUrl]" />
               <div v-else class="pending"><el-icon class="is-loading" v-if="r.status==='processing'"><Loading /></el-icon><el-icon v-else color="#f56c6c"><WarningFilled /></el-icon></div>
             </div>
           </div>

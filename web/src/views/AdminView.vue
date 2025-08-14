@@ -249,7 +249,7 @@
         <div class="mk-card">
           <div class="gen-grid">
             <div v-for="g in gens" :key="g.id" class="gen-cell">
-              <el-image :src="g.resultUrl || g.sourceUrl" fit="cover" class="gen-img" :preview-src-list="[g.resultUrl || g.sourceUrl]" />
+              <el-image :src="g.resultUrl || g.sourceUrl" fit="contain" class="gen-img" :preview-src-list="[g.resultUrl || g.sourceUrl]" />
               <el-icon class="gen-del" title="删除违规内容" @click="removeGen(g)"><CircleCloseFilled /></el-icon>
               <div class="gen-meta text-secondary">{{ g.email }}<br />{{ new Date(g.createdAt).toLocaleString('zh-CN') }}</div>
             </div>
@@ -537,7 +537,7 @@ const toggleBan = async row => {
 .gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .gen-cell {
   position: relative;
-  .gen-img { width: 100%; height: 110px; border-radius: 8px; overflow: hidden; display: block; }
+  .gen-img { width: 100%; height: 110px; border-radius: 8px; overflow: hidden; display: block; background: var(--mk-bg); }
   .gen-del {
     position: absolute; top: 6px; right: 6px; cursor: pointer;
     color: #f56c6c; background: #fff; border-radius: 50%; font-size: 18px;
