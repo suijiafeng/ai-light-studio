@@ -1,0 +1,379 @@
+<title>工作台重设计 · AI灯光工作室</title>
+<style>
+  :root{
+    --mk-primary:#7c6cff; --mk-primary-2:#4dd0e1;
+    --mk-gradient:linear-gradient(135deg,#7c6cff 0%,#4dd0e1 100%);
+    --mk-radius:14px;
+    --mk-bg:#f5f6fa; --mk-card:#ffffff;
+    --mk-border:rgba(0,0,0,.06); --mk-border-2:rgba(0,0,0,.1);
+    --mk-text:#1f2330; --mk-text-2:#6b7280;
+    --shadow:0 1px 2px rgba(20,20,50,.04),0 8px 24px rgba(20,20,50,.06);
+    --shadow-lg:0 12px 40px rgba(60,50,140,.16);
+  }
+  [data-theme="dark"]{
+    --mk-bg:#0e1016; --mk-card:#171a23;
+    --mk-border:rgba(255,255,255,.08); --mk-border-2:rgba(255,255,255,.14);
+    --mk-text:#e8eaf2; --mk-text-2:#9aa0b3;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.4);
+    --shadow-lg:0 12px 40px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+    background:var(--mk-bg);color:var(--mk-text);
+    line-height:1.5;-webkit-font-smoothing:antialiased;
+    padding:28px 20px 80px;transition:background .3s,color .3s;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+
+  /* ---- 顶部说明条(仅原型用,非产品的一部分) ---- */
+  .doc-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  .doc-head h1{font-size:19px;font-weight:750;letter-spacing:-.01em}
+  .doc-head p{font-size:13px;color:var(--mk-text-2);margin-top:3px}
+  .toggles{display:flex;gap:8px}
+  .toggles button{
+    font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+    padding:7px 13px;border-radius:9px;border:1px solid var(--mk-border-2);
+    background:var(--mk-card);color:var(--mk-text);transition:.18s;
+  }
+  .toggles button:hover{border-color:var(--mk-primary)}
+  .toggles button.on{background:var(--mk-gradient);color:#fff;border-color:transparent}
+
+  /* ---- 产品外壳 ---- */
+  .app{
+    background:var(--mk-card);border:1px solid var(--mk-border);
+    border-radius:20px;box-shadow:var(--shadow);overflow:hidden;
+  }
+  .app-bar{
+    display:flex;align-items:center;gap:10px;padding:16px 22px;
+    border-bottom:1px solid var(--mk-border);
+  }
+  .logo-dot{width:26px;height:26px;border-radius:8px;background:var(--mk-gradient);
+    display:grid;place-items:center;color:#fff;font-size:15px}
+  .app-bar .title{font-weight:700;font-size:15px}
+  .app-bar .demo-tag{font-size:11px;font-weight:600;color:#b26b00;background:rgba(255,180,0,.14);
+    padding:2px 8px;border-radius:20px}
+  .app-bar .spacer{flex:1}
+  .credit-chip{font-size:12.5px;color:var(--mk-text-2);display:flex;align-items:center;gap:6px}
+  .credit-chip b{color:var(--mk-text);font-variant-numeric:tabular-nums}
+
+  /* ---- 步骤指示 ---- */
+  .steps{display:flex;align-items:center;gap:6px;padding:15px 22px 4px}
+  .step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mk-text-2);font-weight:600}
+  .step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+    font-size:12px;background:var(--mk-border);color:var(--mk-text-2);transition:.25s}
+  .step.active{color:var(--mk-text)}
+  .step.active .n{background:var(--mk-gradient);color:#fff}
+  .step.done .n{background:var(--mk-primary);color:#fff}
+  .step-line{flex:1;height:2px;background:var(--mk-border);border-radius:2px;max-width:60px}
+
+  /* ---- 舞台 ---- */
+  .stage{padding:22px}
+
+  /* 空态:一个大动作 */
+  .drop{
+    border:2px dashed var(--mk-border-2);border-radius:16px;
+    padding:46px 24px;text-align:center;cursor:pointer;transition:.2s;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .drop:hover{border-color:var(--mk-primary);background:rgba(124,108,255,.05)}
+  .drop .ic{width:56px;height:56px;border-radius:16px;background:var(--mk-gradient);
+    display:grid;place-items:center;color:#fff;font-size:26px;margin-bottom:6px}
+  .drop h2{font-size:17px;font-weight:700}
+  .drop .sub{font-size:13px;color:var(--mk-text-2)}
+  .examples{margin-top:22px}
+  .examples .lab{font-size:12px;color:var(--mk-text-2);text-align:center;margin-bottom:10px;
+    letter-spacing:.03em}
+  .ex-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .ex{border-radius:12px;overflow:hidden;border:1px solid var(--mk-border);position:relative;aspect-ratio:4/3}
+  .ex .cap{position:absolute;left:0;right:0;bottom:0;font-size:11px;color:#fff;
+    background:linear-gradient(transparent,rgba(0,0,0,.6));padding:14px 8px 6px;text-align:center}
+
+  /* 工作态:图 + 风格 */
+  .work{display:grid;grid-template-columns:1fr 300px;gap:20px}
+  .canvas-col{display:flex;flex-direction:column;gap:12px}
+  .photo{
+    border-radius:14px;overflow:hidden;position:relative;aspect-ratio:4/3;
+    box-shadow:var(--shadow);border:1px solid var(--mk-border);
+  }
+  .photo .badge{position:absolute;top:10px;left:10px;font-size:11px;font-weight:600;
+    background:rgba(0,0,0,.55);color:#fff;padding:3px 9px;border-radius:20px;backdrop-filter:blur(4px)}
+  .photo-tools{display:flex;gap:8px;justify-content:center}
+  .ghost-btn{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+    padding:7px 12px;border-radius:9px;border:1px solid var(--mk-border-2);
+    background:transparent;color:var(--mk-text-2);transition:.18s;display:flex;align-items:center;gap:5px}
+  .ghost-btn:hover{border-color:var(--mk-primary);color:var(--mk-text)}
+
+  .side{display:flex;flex-direction:column;gap:14px}
+  .side-h{font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+  .side-h .rec{font-size:11px;font-weight:600;color:var(--mk-primary);
+    display:flex;align-items:center;gap:4px}
+
+  /* 风格卡 = 看图选,不是看字选 */
+  .looks{display:flex;flex-direction:column;gap:9px}
+  .look{
+    display:flex;align-items:center;gap:11px;padding:8px;border-radius:12px;cursor:pointer;
+    border:2px solid var(--mk-border);transition:.16s;background:var(--mk-card);position:relative;
+  }
+  .look:hover{border-color:var(--mk-border-2)}
+  .look.on{border-color:var(--mk-primary);background:rgba(124,108,255,.05)}
+  .look .sw{width:52px;height:44px;border-radius:8px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.05)}
+  .look .meta .nm{font-size:13.5px;font-weight:650}
+  .look .meta .ds{font-size:11.5px;color:var(--mk-text-2);margin-top:1px}
+  .look .tick{position:absolute;top:8px;right:9px;width:18px;height:18px;border-radius:50%;
+    background:var(--mk-gradient);color:#fff;display:none;place-items:center;font-size:11px}
+  .look.on .tick{display:grid}
+  .look .best{position:absolute;top:-7px;right:10px;font-size:10px;font-weight:700;color:#fff;
+    background:var(--mk-primary);padding:1px 7px;border-radius:20px;letter-spacing:.02em}
+
+  /* 高级:默认折叠 */
+  .adv{border-top:1px solid var(--mk-border);padding-top:12px}
+  .adv-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+    font-size:12.5px;font-weight:600;color:var(--mk-text-2);user-select:none}
+  .adv-toggle:hover{color:var(--mk-text)}
+  .adv-toggle .chev{transition:transform .2s}
+  .adv.open .chev{transform:rotate(180deg)}
+  .adv-body{display:none;flex-direction:column;gap:13px;padding-top:14px}
+  .adv.open .adv-body{display:flex}
+  .field .fl{font-size:12px;font-weight:600;display:flex;justify-content:space-between;margin-bottom:6px}
+  .field .fl span{color:var(--mk-text-2);font-variant-numeric:tabular-nums}
+  .track{height:5px;border-radius:5px;background:var(--mk-border);position:relative}
+  .track .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--mk-gradient)}
+  .track .knob{position:absolute;top:50%;width:15px;height:15px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.3);transform:translate(-50%,-50%);border:2px solid var(--mk-primary)}
+  .dirs{display:flex;gap:6px}
+  .dir{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:7px 2px;border-radius:8px;
+    border:1px solid var(--mk-border);cursor:pointer;color:var(--mk-text-2);transition:.16s}
+  .dir:hover{border-color:var(--mk-border-2)}
+  .dir.on{background:var(--mk-gradient);color:#fff;border-color:transparent}
+
+  /* 主行动区 */
+  .cta-zone{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+  .btn-primary{
+    font:inherit;font-size:15px;font-weight:700;cursor:pointer;color:#fff;border:none;
+    background:var(--mk-gradient);padding:14px;border-radius:12px;box-shadow:var(--shadow-lg);
+    display:flex;align-items:center;justify-content:center;gap:8px;transition:.16s;
+  }
+  .btn-primary:hover{filter:brightness(1.05);transform:translateY(-1px)}
+  .btn-secondary{
+    font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--mk-text-2);
+    background:transparent;border:none;padding:2px;transition:.16s;text-decoration:underline;text-underline-offset:3px;
+  }
+  .btn-secondary:hover{color:var(--mk-primary)}
+
+  /* 结果态 */
+  .result-wrap{display:flex;flex-direction:column;gap:16px;align-items:center}
+  .compare{width:100%;max-width:640px;border-radius:16px;overflow:hidden;position:relative;
+    box-shadow:var(--shadow-lg);aspect-ratio:16/10;cursor:ew-resize}
+  .compare .after,.compare .before{position:absolute;inset:0}
+  .compare .before{clip-path:inset(0 50% 0 0)}
+  .compare .divider{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;box-shadow:0 0 8px rgba(0,0,0,.4)}
+  .compare .handle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:13px;color:#333}
+  .compare .tag{position:absolute;bottom:10px;font-size:11px;font-weight:600;color:#fff;
+    background:rgba(0,0,0,.5);padding:3px 9px;border-radius:20px;backdrop-filter:blur(4px)}
+  .compare .tag.l{left:10px} .compare .tag.r{right:10px}
+  .result-actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .result-actions .btn-primary{font-size:13px;padding:9px 18px;box-shadow:none}
+  .tier{font-size:12px;color:var(--mk-text-2);display:flex;align-items:center;gap:8px}
+  .tier a{color:var(--mk-primary);text-decoration:none;font-weight:600}
+
+  .note{font-size:12px;color:var(--mk-text-2);text-align:center;margin-top:20px;line-height:1.7}
+
+  @media(max-width:760px){
+    .work{grid-template-columns:1fr}
+    .ex-row{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+
+<div class="wrap">
+  <div class="doc-head">
+    <div>
+      <h1>工作台重设计 · 交互原型</h1>
+      <p>点击下方按钮走一遍新流程 · 右上角可切换深色/演示状态</p>
+    </div>
+    <div class="toggles">
+      <button id="tPhase" class="on" onclick="cyclePhase()">▶ 走一遍流程</button>
+      <button id="tTheme" onclick="toggleTheme()">🌙 深色</button>
+    </div>
+  </div>
+
+  <div class="app" data-theme="light" id="app">
+    <div class="app-bar">
+      <div class="logo-dot">✦</div>
+      <div class="title">AI灯光工作台</div>
+      <div class="demo-tag">演示模式</div>
+      <div class="spacer"></div>
+      <div class="credit-chip">算力余额 <b>120</b></div>
+    </div>
+
+    <div class="steps">
+      <div class="step" id="s1"><span class="n">1</span>上传照片</div>
+      <div class="step-line"></div>
+      <div class="step" id="s2"><span class="n">2</span>挑选效果</div>
+      <div class="step-line"></div>
+      <div class="step" id="s3"><span class="n">3</span>生成下载</div>
+    </div>
+
+    <div class="stage" id="stage"><!-- JS 注入 --></div>
+  </div>
+
+  <p class="note">
+    这是一个纯前端点击原型,用于确认交互方向。图片用 CSS 渐变模拟"打光效果",实际接入现有生成接口后为真实照片。<br>
+    核心变化:<b>一次只做一件事</b> · 风格从"文字网格"变为<b>可视化效果卡</b> · 滑块/裁剪/局部重绘全部收进<b>「微调」折叠区</b> · AI顾问<b>自动预选</b>最佳风格。
+  </p>
+</div>
+
+<script>
+// ---- 模拟"打光效果"的渐变(代替真实照片) ----
+const room = 'linear-gradient(160deg,#3a3f4b 0%,#2a2e38 55%,#1c1f27 100%)';
+const looks = [
+  {key:'night_warm', nm:'夜景暖光', ds:'温暖 · 2700K',  g:'radial-gradient(120% 90% at 30% 20%,#ffd9a0 0%,#c98a4a 35%,#5a3d28 75%,#241a12 100%)', best:true},
+  {key:'daylight',   nm:'日间自然光', ds:'通透 · 5500K', g:'radial-gradient(120% 90% at 40% 15%,#fff6e6 0%,#dfe6ec 40%,#9fb0bd 80%,#5c6b78 100%)'},
+  {key:'office_cool',nm:'办公冷光', ds:'明亮 · 6500K',  g:'radial-gradient(120% 90% at 50% 20%,#eaf4ff 0%,#b8d4ec 40%,#7f9db8 80%,#465868 100%)'},
+  {key:'wall_wash',  nm:'氛围洗墙光', ds:'柔和 · 3200K', g:'linear-gradient(105deg,#ffb877 0%,#a9663f 30%,#4a2f22 70%,#1c1410 100%)'},
+];
+let sel = 0, phase = 1, adv = false;
+
+const stage = document.getElementById('stage');
+
+function render(){
+  ['s1','s2','s3'].forEach((id,i)=>{
+    const el=document.getElementById(id); el.className='step';
+    if(i+1<phase) el.className='step done';
+    if(i+1===phase) el.className='step active';
+  });
+  if(phase===1) stage.innerHTML = tplUpload();
+  else if(phase===2) stage.innerHTML = tplWork();
+  else stage.innerHTML = tplResult();
+}
+
+function tplUpload(){
+  return `
+  <div class="drop" onclick="go(2)">
+    <div class="ic">↑</div>
+    <h2>上传室内实景照片,开始重打光</h2>
+    <div class="sub">点击或拖拽 · 支持 JPG / PNG / WEBP,最大 15MB</div>
+  </div>
+  <div class="examples">
+    <div class="lab">示例效果 · 同一张照片的不同灯光方案</div>
+    <div class="ex-row">
+      ${looks.map(l=>`<div class="ex" style="background:${l.g}"><div class="cap">${l.nm}</div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function tplWork(){
+  return `
+  <div class="work">
+    <div class="canvas-col">
+      <div class="photo" style="background:${sel<0?room:looks[sel].g}">
+        <div class="badge">${sel<0?'原图':'预览 · '+looks[sel].nm}</div>
+      </div>
+      <div class="photo-tools">
+        <button class="ghost-btn" onclick="go(1)">↺ 更换图片</button>
+        <button class="ghost-btn">⤢ 裁剪</button>
+        <button class="ghost-btn">✎ 局部重绘</button>
+      </div>
+    </div>
+
+    <div class="side">
+      <div>
+        <div class="side-h">选一个想要的效果 <span class="rec">✨ AI已为你预选</span></div>
+        <div class="looks">
+          ${looks.map((l,i)=>`
+            <div class="look ${i===sel?'on':''}" onclick="pick(${i})">
+              ${l.best?'<span class="best">推荐</span>':''}
+              <div class="sw" style="background:${l.g}"></div>
+              <div class="meta"><div class="nm">${l.nm}</div><div class="ds">${l.ds}</div></div>
+              <div class="tick">✓</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="adv ${adv?'open':''}" id="adv">
+        <div class="adv-toggle" onclick="toggleAdv()">
+          <span>微调参数(可选)</span><span class="chev">⌄</span>
+        </div>
+        <div class="adv-body">
+          ${slider('亮度','62')}
+          ${slider('色温','2700K',0.28)}
+          ${slider('光影强度','55')}
+          ${slider('明暗细节','48')}
+          <div class="field">
+            <div class="fl">光源方向</div>
+            <div class="dirs">
+              ${['环境光','左','右','顶','底'].map((d,i)=>`<div class="dir ${i===1?'on':''}">${d}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cta-zone">
+        <button class="btn-primary" onclick="go(3)">✦ 生成效果 · 消耗 5 算力</button>
+        <button class="btn-secondary" onclick="go(3)">或一次生成全部 4 种风格(8 算力)</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function slider(label,val,pos=0.62){
+  const p=(typeof pos==='number'?pos:0.62)*100;
+  return `<div class="field"><div class="fl">${label}<span>${val}</span></div>
+    <div class="track"><div class="fill" style="width:${p}%"></div><div class="knob" style="left:${p}%"></div></div></div>`;
+}
+
+function tplResult(){
+  const l=looks[sel<0?0:sel];
+  return `
+  <div class="result-wrap">
+    <div class="compare" id="cmp">
+      <div class="after" style="background:${l.g}"></div>
+      <div class="before" style="background:${room}" id="beforeLayer"></div>
+      <div class="tag l">原图</div>
+      <div class="tag r">${l.nm}</div>
+      <div class="divider" id="div"></div>
+      <div class="handle" id="handle">⇄</div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-primary" onclick="go(2)">↓ 下载高清图</button>
+      <button class="ghost-btn">⤴ 分享</button>
+      <button class="ghost-btn">✎ 再次编辑</button>
+      <button class="ghost-btn" onclick="go(2)">↺ 换个效果</button>
+    </div>
+    <div class="tier">免费版 1024px · 含水印　<a href="#" onclick="return false">开通会员享 2048px 高清无水印 →</a></div>
+  </div>`;
+}
+
+function pick(i){ sel=i; render(); }
+function toggleAdv(){ adv=!adv; render(); }
+function go(p){ phase=p; if(p===2&&sel<0) sel=0; render(); bindCompare(); }
+function cyclePhase(){ phase = phase%3 + 1; if(phase===2&&sel<0)sel=0; render(); bindCompare(); }
+
+function bindCompare(){
+  const cmp=document.getElementById('cmp'); if(!cmp) return;
+  const move=e=>{
+    const r=cmp.getBoundingClientRect();
+    const x=Math.max(0,Math.min(1,((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width));
+    document.getElementById('beforeLayer').style.clipPath=`inset(0 ${100-x*100}% 0 0)`;
+    document.getElementById('div').style.left=x*100+'%';
+    document.getElementById('handle').style.left=x*100+'%';
+  };
+  let down=false;
+  cmp.addEventListener('mousedown',()=>down=true);
+  window.addEventListener('mouseup',()=>down=false);
+  cmp.addEventListener('mousemove',e=>{if(down)move(e)});
+  cmp.addEventListener('touchmove',move);
+}
+
+function toggleTheme(){
+  const app=document.getElementById('app');
+  const dark=app.getAttribute('data-theme')==='dark';
+  app.setAttribute('data-theme',dark?'light':'dark');
+  document.documentElement.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('tTheme').textContent=dark?'🌙 深色':'☀ 浅色';
+}
+
+sel=-1; render();
+</script>
