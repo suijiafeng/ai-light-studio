@@ -18,7 +18,7 @@ const validPassword = p =>
   typeof p === 'string' && p.length >= 8 && p.length <= 32 && /[a-zA-Z]/.test(p) && /\d/.test(p);
 
 // 防滥用限流
-const registerLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, key: 'reg', message: '注册太频繁，请1小时后再试' });
+const registerLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, key: 'reg', message: '注册太频繁，请1小时后再试' });
 const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, key: 'login', message: '尝试次数过多，请15分钟后再试' });
 const codeLimit = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, key: 'code', message: '验证码请求太频繁，请稍后再试' });
 const resetLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, key: 'reset', message: '尝试次数过多，请15分钟后再试' });

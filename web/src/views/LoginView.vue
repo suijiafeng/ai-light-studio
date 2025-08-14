@@ -43,6 +43,14 @@
             </template>
           </el-input>
         </el-form-item>
+        <el-form-item v-if="isRegister && needCode" label="邮箱验证码">
+          <div class="code-row">
+            <el-input v-model="form.code" placeholder="6位验证码" maxlength="6" />
+            <el-button :disabled="regCountdown > 0" :loading="sendingRegCode" @click="sendRegCode">
+              {{ regCountdown > 0 ? `${regCountdown}s` : '获取验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
         <el-checkbox v-if="isRegister" v-model="agreed" class="agree">
           我已阅读并同意
           <el-link type="primary" @click.stop="openLegal('terms')">《用户协议》</el-link>和
@@ -137,10 +145,36 @@ watch(() => route.fullPath, () => {
 
 const loading = ref(false)
 const formRef = ref()
-const form = reactive({ email: '', password: '', nickname: '', confirmPassword: '' })
+const form = reactive({ email: '', password: '', nickname: '', confirmPassword: '', code: '' })
 const showPwd = ref(false)
 const strength = computed(() => passwordStrength(form.password))
 const showPwd2 = ref(false)
+
+// 注册邮箱验证码（管理员邮箱或 EMAIL_VERIFY=on 时后端要求）
+const needCode = ref(false)
+const sendingRegCode = ref(false)
+const regCountdown = ref(0)
+let regCdTimer = null
+
+const sendRegCode = async () => {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return ElMessage.warning('请先输入正确的邮箱')
+  sendingRegCode.value = true
+  try {
+    const data = await apiSendCode({ email: form.email, purpose: 'register' })
+    if (data.devCode) {
+      form.code = data.devCode
+      ElMessage.info(`开发模式：验证码已自动填入（${data.devCode}）`)
+    } else {
+      ElMessage.success('验证码已发送，请查收邮箱')
+    }
+    regCountdown.value = 60
+    regCdTimer = setInterval(() => { if (--regCountdown.value <= 0) clearInterval(regCdTimer) }, 1000)
+  } catch (e) {
+    if (e.code !== -1) ElMessage.error(e.message)
+  } finally {
+    sendingRegCode.value = false
+  }
+}
 
 const rules = {
   email: [
@@ -218,6 +252,10 @@ const openLegal = tab => { legalTab.value = tab; legalVisible.value = true }
 const submit = async () => {
   await formRef.value.validate()
   if (isRegister.value && !agreed.value) return ElMessage.warning('请先阅读并勾选同意用户协议与隐私政策')
+  // 需验证码但未填：提示先获取
+  if (isRegister.value && needCode.value && !form.code) {
+    return ElMessage.warning('该邮箱需邮箱验证码，请点击“获取验证码”')
+  }
   loading.value = true
   try {
     if (isRegister.value) {
@@ -227,6 +265,8 @@ const submit = async () => {
       isRegister.value = false
       form.password = ''
       form.confirmPassword = ''
+      form.code = ''
+      needCode.value = false
       agreed.value = false
       return
     } else {
@@ -235,7 +275,13 @@ const submit = async () => {
     }
     router.push(route.query.redirect || '/studio')
   } catch (e) {
-    if (e.code !== -1) ElMessage.error(e.message)
+    // 后端要求邮箱验证码：自动展开验证码输入并引导获取
+    if (isRegister.value && /验证码/.test(e.message || '') && !needCode.value) {
+      needCode.value = true
+      ElMessage.info('该邮箱为管理员/受保护邮箱，请获取邮箱验证码后完成注册')
+    } else if (e.code !== -1) {
+      ElMessage.error(e.message)
+    }
   } finally {
     loading.value = false
   }
