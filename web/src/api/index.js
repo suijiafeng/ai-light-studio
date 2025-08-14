@@ -43,6 +43,19 @@ export const apiShareInfo = shareId => request.get(`/generate/share/${shareId}`)
 export const apiAdvise = fileId => request.post('/generate/advise', { fileId })
 export const apiBulk = data => request.post('/generate/bulk', data)
 
+// ---------- 节点工作流画布 ----------
+export const apiWorkflowList = () => request.get('/workflow')
+export const apiWorkflowGet = id => request.get(`/workflow/${id}`)
+export const apiWorkflowCreate = data => request.post('/workflow', data)
+export const apiWorkflowUpdate = (id, data) => request.put(`/workflow/${id}`, data)
+export const apiWorkflowDelete = id => request.delete(`/workflow/${id}`)
+export const apiWorkflowEstimate = (id, graph) => request.post(`/workflow/${id}/estimate`, { graph })
+export const apiWorkflowRun = id => request.post(`/workflow/${id}/run`)
+export const apiWorkflowRunStatus = runId => request.get(`/workflow/run/${runId}`)
+export const apiWorkflowRunCancel = runId => request.post(`/workflow/run/${runId}/cancel`)
+export const apiWorkflowRunEventsUrl = runId =>
+  `/api/workflow/run/${runId}/events?token=${encodeURIComponent(localStorage.getItem('token') || '')}`
+
 // ---------- API密钥 ----------
 export const apiKeys = () => request.get('/keys')
 export const apiCreateKey = name => request.post('/keys', { name })
