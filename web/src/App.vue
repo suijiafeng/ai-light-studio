@@ -17,6 +17,28 @@
         </nav>
 
         <div class="header-right">
+          <!-- 全局任务中心：生成/工作流任务跨页面可见，转圈=有任务在跑 -->
+          <el-popover v-if="userStore.isLogin && tasksStore.tasks.length" placement="bottom-end" width="300" trigger="click">
+            <template #reference>
+              <el-button circle text class="task-bell">
+                <el-icon :size="17" :class="{ 'is-loading': tasksStore.activeCount }">
+                  <Loading v-if="tasksStore.activeCount" /><Finished v-else />
+                </el-icon>
+                <span v-if="tasksStore.activeCount" class="task-dot">{{ tasksStore.activeCount }}</span>
+              </el-button>
+            </template>
+            <div class="task-list">
+              <div class="task-title">任务中心</div>
+              <div v-for="t in tasksStore.recent" :key="t.key" class="task-item" @click="t.link && $router.push(t.link)">
+                <el-icon v-if="t.status === 'running'" class="is-loading tk-run"><Loading /></el-icon>
+                <el-icon v-else-if="t.status === 'success'" class="tk-ok"><CircleCheckFilled /></el-icon>
+                <el-icon v-else class="tk-fail"><CircleCloseFilled /></el-icon>
+                <span class="task-label">{{ t.label }}</span>
+                <span class="task-time">{{ taskTime(t) }}</span>
+              </div>
+            </div>
+          </el-popover>
+
           <el-tooltip :content="themeStore.dark ? '切换亮色模式' : '切换暗黑模式'">
             <el-button circle text @click="themeStore.toggle()">
               <el-icon :size="18"><Moon v-if="!themeStore.dark" /><Sunny v-else /></el-icon>
@@ -56,12 +78,20 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { Loading, Finished, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
+import { useTasksStore } from '@/stores/tasks'
 
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const tasksStore = useTasksStore()
+
+const taskTime = t => {
+  const d = new Date(t.createdAt)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 onMounted(() => {
   themeStore.apply()
@@ -126,6 +156,12 @@ const onCommand = cmd => {
   }
 }
 .header-right { display: flex; align-items: center; gap: 12px; }
+.task-bell { position: relative; }
+.task-dot {
+  position: absolute; top: 0; right: 0; min-width: 15px; height: 15px; border-radius: 8px;
+  background: var(--mk-primary); color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; padding: 0 3px; line-height: 1;
+}
 .credits-tag { cursor: pointer; }
 .user-chip {
   display: flex; align-items: center; gap: 8px; cursor: pointer; outline: none;
@@ -133,4 +169,21 @@ const onCommand = cmd => {
   .nickname { font-size: 14px; color: var(--mk-text); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .app-main { flex: 1; }
+</style>
+
+<style lang="scss">
+/* 任务中心弹层内容是 teleport 到 body 的，scoped 样式够不到，这里用全局 */
+.task-list {
+  .task-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .task-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 8px;
+    font-size: 12.5px; cursor: pointer;
+    &:hover { background: var(--mk-bg); }
+    .tk-run { color: #409eff; }
+    .tk-ok { color: #67c23a; }
+    .tk-fail { color: #f56c6c; }
+    .task-label { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .task-time { color: var(--mk-text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  }
+}
 </style>

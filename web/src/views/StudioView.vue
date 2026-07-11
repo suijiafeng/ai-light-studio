@@ -208,6 +208,25 @@
             <el-button plain @click="backToEdit">返回调整</el-button>
           </div>
         </div>
+
+        <!-- 会话画廊：本次会话生成过的每张图都在这里，点选回看、恢复参数继续调，
+             多轮"调参→生成→对比"不再互相覆盖 -->
+        <div v-if="sessionGallery.length > 1 && !generating" class="session-strip">
+          <div class="ss-label">本次生成（{{ sessionGallery.length }}）</div>
+          <div class="ss-row">
+            <div
+              v-for="g in sessionGallery"
+              :key="g.id"
+              class="ss-cell"
+              :class="{ active: result && result.id === g.id }"
+              :title="`${styleNames[g.params?.style] || '方案'} · ${g.params?.colorTemp || ''}K`"
+              @click="viewGalleryItem(g)"
+            >
+              <img :src="g.resultUrl" alt="" />
+              <el-icon class="ss-restore" title="恢复这张图的参数" @click.stop="restoreParams(g)"><RefreshLeft /></el-icon>
+            </div>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -255,11 +274,13 @@ import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 import { apiUpload, apiStyles, apiGenerate, apiGenerateStatus, apiGenerateBatch, apiBatchStatus, apiAdvise, apiShare } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { useTasksStore } from '@/stores/tasks'
 import CompareSlider from '@/components/CompareSlider.vue'
 import { compressImage, requestNotifyPermission, notifyDone } from '@/utils/media'
 
 const route = useRoute()
 const userStore = useUserStore()
+const tasksStore = useTasksStore()
 
 const styles = ref([])
 const directions = ref([
@@ -300,6 +321,28 @@ const uploadPercent = ref(0)
 const generating = ref(false)
 const fakePercent = ref(0)
 const result = ref(null)
+
+// 会话画廊：本次会话里每张成功的生成结果都留档（跨多轮生成），随时点回去对比、
+// 一键恢复那张图的参数继续调——生成不再是"新的覆盖旧的"的单行道
+const sessionGallery = ref([])
+const pushToGallery = g => {
+  if (!g || g.status !== 'success' || sessionGallery.value.some(i => i.id === g.id)) return
+  sessionGallery.value.unshift(g)
+  if (sessionGallery.value.length > 24) sessionGallery.value.pop()
+}
+const viewGalleryItem = g => {
+  result.value = g
+  batchResults.value = []
+  compareMode.value = false
+}
+const RESTORABLE_KEYS = ['style', 'brightness', 'colorTemp', 'intensity', 'detail', 'direction']
+const restoreParams = g => {
+  for (const k of RESTORABLE_KEYS) {
+    if (g.params?.[k] !== undefined) params[k] = g.params[k]
+  }
+  ElMessage.success('已恢复这张图的生成参数，可微调后再次生成')
+  backToEdit()
+}
 const step = computed(() => {
   if (!source.fileId) return 1
   if (generating.value || result.value || batchResults.value.length) return 3
@@ -506,6 +549,7 @@ const generateBatch = async () => {
   try {
     const { batchId } = await apiGenerateBatch({ fileId: source.fileId, params: { ...params, maskId: maskId.value || undefined } })
     userStore.fetchMe()
+    tasksStore.track('batch', batchId, '四风格连拍', '/studio')
     pollTimer = setInterval(async () => {
       try {
         const data = await apiBatchStatus(batchId)
@@ -516,6 +560,7 @@ const generateBatch = async () => {
           generating.value = false
           const okList = data.list.filter(i => i.status === 'success')
           result.value = okList[0] || null
+          for (const g of okList) pushToGallery(g)
           ElMessage.success(`连拍完成：成功${okList.length}张`)
           notifyDone(`4风格连拍完成，成功${okList.length}张`)
           if (okList.length < data.list.length) userStore.fetchMe()
@@ -544,6 +589,7 @@ const generate = async () => {
   try {
     const { id } = await apiGenerate({ fileId: source.fileId, params: { ...params, maskId: maskId.value || undefined } })
     userStore.fetchMe()
+    tasksStore.track('generate', id, `${styleNames[params.style] || '灯光'} · 单张生成`, '/studio')
     pollTimer = setInterval(async () => {
       try {
         const g = await apiGenerateStatus(id)
@@ -551,6 +597,7 @@ const generate = async () => {
           stopTimers()
           fakePercent.value = 100
           result.value = g
+          pushToGallery(g)
           generating.value = false
           if (g.status === 'success') { ElMessage.success('生成完成！'); notifyDone() }
           else userStore.fetchMe()
@@ -733,6 +780,23 @@ const editResult = async () => {
     background: rgba(0, 0, 0, .55); padding: 2px 4px;
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
+}
+
+.session-strip { margin-top: 16px; border-top: 1px dashed var(--mk-border); padding-top: 12px; }
+.ss-label { font-size: 12px; color: var(--mk-text-2); margin-bottom: 8px; }
+.ss-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.ss-cell {
+  position: relative; width: 72px; height: 54px; flex: none; border-radius: 8px; overflow: hidden;
+  border: 2px solid var(--mk-border); cursor: pointer; background: rgba(0, 0, 0, .12); transition: border-color .15s;
+  img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  &.active { border-color: var(--mk-primary); }
+  &:hover { border-color: var(--mk-primary); }
+  .ss-restore {
+    position: absolute; right: 3px; bottom: 3px; font-size: 13px; color: #fff;
+    background: rgba(0, 0, 0, .55); border-radius: 50%; padding: 3px; opacity: 0; transition: opacity .15s;
+    &:hover { background: var(--mk-primary); }
+  }
+  &:hover .ss-restore { opacity: 1; }
 }
 
 .small { font-size: 12px; }
