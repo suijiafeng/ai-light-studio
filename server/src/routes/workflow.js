@@ -118,6 +118,17 @@ const toNodeRunDto = n => ({
   startedAt: n.started_at || null,
   finishedAt: n.finished_at || null
 });
+// 运行历史：一个工作流最近的运行记录（含产物），前端"运行历史"抽屉用。
+// 跑完第 N+1 次后第 N 次的产物依然可以回看/下载，不再"再跑一次上次就没了"。
+router.get('/:id/runs', auth, (req, res) => {
+  const wf = db.prepare('SELECT id FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!wf) return fail(res, 404, '工作流不存在');
+  const rows = db.prepare(
+    'SELECT id, workflow_id, status, cost, outputs, error, created_at, finished_at FROM workflow_runs WHERE workflow_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 20'
+  ).all(req.params.id, req.user.id);
+  return ok(res, { list: rows.map(toRunDto) });
+});
+
 router.post('/:id/estimate', auth, wfEstimateLimit, (req, res) => {
   const wf = db.prepare('SELECT id FROM workflows WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!wf) return fail(res, 404, '工作流不存在');
