@@ -24,7 +24,7 @@
       <el-icon v-else-if="runStatus === 'failed'"><WarningFilled /></el-icon>
     </div>
     <div class="wf-node-head">
-      <el-icon class="wf-node-ic"><component :is="iconComp" /></el-icon>
+      <span class="wf-node-chip"><el-icon><component :is="iconComp" /></el-icon></span>
       <span class="wf-node-title">{{ def.label }}</span>
     </div>
     <div class="wf-node-body">
@@ -201,21 +201,41 @@ const styleName = computed(() => (STYLE_OPTIONS.find(s => s.key === props.data.s
 .wf-resize-line.left, .wf-resize-line.right { width: 5px !important; }
 .wf-resize-line.top, .wf-resize-line.bottom { height: 5px !important; }
 .wf-resize-line { border-color: var(--mk-primary) !important; }
+
+/* 暗色下浅色投影几乎不可见，换成更重的黑色投影撑出卡片悬浮感 */
+html.dark .wf-node {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 8px 26px rgba(0, 0, 0, .4);
+}
+html.dark .wf-node.selected {
+  box-shadow:
+    0 0 0 1.5px var(--accent),
+    0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 12px 32px rgba(0, 0, 0, .5);
+}
 </style>
 
 <style scoped>
 
 .wf-node {
-    position: relative;
+  position: relative;
   min-width: 200px; background: var(--mk-card); border: 1px solid var(--mk-border);
-  border-radius: 8px;
-  border-top: 2px solid var(--accent); transition: box-shadow .15s;
-    width: 100%; height: 100%; display: flex; flex-direction: column;
+  border-radius: 13px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 18px rgba(16, 24, 40, .07);
+  transition: box-shadow .18s, border-color .18s;
+  width: 100%; height: 100%; display: flex; flex-direction: column;
 }
+.wf-node:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--mk-border)); }
 
-.wf-node.selected { box-shadow: 0 0 0 1.5px var(--mk-primary); }
-.wf-node.run-running { box-shadow: 0 0 0 1.5px #409eff; }
-.wf-node.run-failed { box-shadow: 0 0 0 1.5px #f56c6c; }
+/* 选中态跟节点类型的品类色（--accent）走：外圈细环+一圈淡光晕，一眼分清选中的是哪类节点 */
+.wf-node.selected {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    0 0 0 1.5px var(--accent),
+    0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 10px 28px rgba(16, 24, 40, .14);
+}
+.wf-node.run-running { box-shadow: 0 0 0 1.5px #409eff, 0 0 0 5px rgba(64, 158, 255, .14); }
+.wf-node.run-failed { box-shadow: 0 0 0 1.5px #f56c6c, 0 0 0 5px rgba(245, 108, 108, .14); }
 
 .wf-resize-hint {
   position: absolute; right: 3px; bottom: 2px; z-index: 1; pointer-events: none;
@@ -233,15 +253,23 @@ const styleName = computed(() => (STYLE_OPTIONS.find(s => s.key === props.data.s
 .wf-run-badge.failed { background: #f56c6c; }
 .wf-spin { animation: wf-spin 1s linear infinite; }
 @keyframes wf-spin { to { transform: rotate(360deg); } }
-.wf-node-head { display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-bottom: 1px solid var(--mk-border); }
-.wf-node-ic { color: var(--accent); font-size: 16px; }
-.wf-node-title { font-size: 13.5px; font-weight: 600; color: var(--mk-text); }
+.wf-node-head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-bottom: 1px solid var(--mk-border); }
+/* 图标芯片：品类色的圆角方块，和左侧节点库的样式呼应，替代原先的裸图标+顶部色条 */
+.wf-node-chip {
+  width: 26px; height: 26px; flex: none; border-radius: 8px;
+  display: grid; place-items: center; font-size: 14px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.wf-node-title { font-size: 13.5px; font-weight: 650; color: var(--mk-text); letter-spacing: .01em; }
 .wf-node-body { padding: 14px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 .wf-preview {
   position: relative;
-  width: 100%; flex: 1; height: auto; min-height: 96px; border-radius: 6px; overflow: hidden;
-  background: rgba(0, 0, 0, .12); display: flex; align-items: center; justify-content: center;
+  width: 100%; flex: 1; height: auto; min-height: 96px; border-radius: 9px; overflow: hidden;
+  background: color-mix(in srgb, var(--mk-text) 6%, transparent);
+  display: flex; align-items: center; justify-content: center;
   border: 1px solid transparent; transition: border-color .15s, background .15s;
 }
 
@@ -279,5 +307,10 @@ const styleName = computed(() => (STYLE_OPTIONS.find(s => s.key === props.data.s
 .wf-result:hover { border-color: var(--mk-primary); }
 .wf-result img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
 
-.wf-handle { width: 10px; height: 10px; background: var(--accent); border: 2px solid var(--mk-card); }
+/* 连接桩：更大更醒目，白描边+品类色填充，一眼能看出"从这里拉线" */
+.wf-handle {
+  width: 12px; height: 12px; background: var(--accent);
+  border: 2.5px solid var(--mk-card);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 1px 4px rgba(0, 0, 0, .25);
+}
 </style>

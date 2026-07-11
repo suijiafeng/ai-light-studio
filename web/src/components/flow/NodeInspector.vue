@@ -11,9 +11,14 @@
       <div class="insp-head">
         <el-icon :style="{ color: def.accent }"><component :is="iconComp" /></el-icon>
         <span>{{ def.label }}</span>
-        <el-button class="insp-del" size="small" text type="danger" :disabled="readonly" @click="$emit('delete', node.id)">
-          <el-icon><Delete /></el-icon>删除
-        </el-button>
+        <div class="insp-ops">
+          <el-button size="small" text :disabled="readonly" title="复制节点（Ctrl+D）" @click="$emit('duplicate', node.id)">
+            <el-icon><CopyDocument /></el-icon>复制
+          </el-button>
+          <el-button size="small" text type="danger" :disabled="readonly" @click="$emit('delete', node.id)">
+            <el-icon><Delete /></el-icon>删除
+          </el-button>
+        </div>
       </div>
       <p class="insp-desc">{{ def.desc }}</p>
       <p v-if="readonly" class="insp-readonly-hint">工作流运行中，暂不可编辑</p>
@@ -74,14 +79,14 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Pointer, Delete, Upload, Download } from '@element-plus/icons-vue'
+import { Pointer, Delete, Upload, Download, CopyDocument } from '@element-plus/icons-vue'
 import * as Icons from '@element-plus/icons-vue'
 import { nodeDef } from './nodeTypes'
 import { apiUpload } from '@/api'
 import { compressImage } from '@/utils/media'
 
 const props = defineProps({ node: { type: Object, default: null }, readonly: { type: Boolean, default: false } })
-defineEmits(['delete'])
+defineEmits(['delete', 'duplicate'])
 
 const def = computed(() => nodeDef(props.node?.type) || { label: '', accent: '#999', fields: [], desc: '' })
 const iconComp = computed(() => Icons[def.value.icon] || Icons.Box)
@@ -123,7 +128,8 @@ const onFile = async e => {
   padding: 40px 10px; text-align: center; font-size: 13px;
 }
 .insp-head { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; }
-.insp-head .insp-del { margin-left: auto; }
+.insp-head .insp-ops { margin-left: auto; display: flex; }
+.insp-head .insp-ops .el-button { margin: 0; padding: 5px 6px; }
 .insp-desc { font-size: 12px; color: var(--mk-text-2); line-height: 1.5; margin-top: -4px; }
 .insp-readonly-hint {
   font-size: 12px; color: #e6a23c; background: rgba(230, 162, 60, .1);

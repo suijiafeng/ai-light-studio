@@ -30,8 +30,7 @@
     </div>
 
     <div class="rp-mid">
-      <span v-if="unsaved" class="rp-hint">请先保存后再运行</span>
-      <span v-else-if="estimating" class="rp-cost rp-muted">计算中…</span>
+      <span v-if="estimating" class="rp-cost rp-muted">计算中…</span>
       <span v-else-if="estimate != null" class="rp-cost">预估消耗 <b>{{ estimate }}</b> 算力</span>
       <span v-else class="rp-cost rp-muted">--</span>
       <span v-if="phaseText" class="rp-phase" :class="runPhase">{{ phaseText }}</span>
@@ -61,12 +60,12 @@ const props = defineProps({
   running: { type: Boolean, default: false },
   runPhase: { type: String, default: 'idle' }, // idle|running|success|failed|canceled
   nodeStatuses: { type: Array, default: () => [] }, // [{id,label,status,error}]
-  unsaved: { type: Boolean, default: false },
   results: { type: Array, default: () => [] } // [{nodeId, image, url}]，运行成功后的最终产物
 })
 defineEmits(['run', 'cancel'])
 
-const canRun = computed(() => props.nodeCount > 0 && !props.estimating && !props.running && !props.unsaved)
+// 未保存不再挡运行——run() 自己会先保存/创建再执行，用户无需理解"保存"这个中间态
+const canRun = computed(() => props.nodeCount > 0 && !props.estimating && !props.running)
 
 const PHASE_TEXT = { running: '运行中…', success: '运行成功', failed: '运行失败', canceled: '已取消' }
 const phaseText = computed(() => PHASE_TEXT[props.runPhase] || '')
