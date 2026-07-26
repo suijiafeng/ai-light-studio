@@ -1,0 +1,5 @@
+# 早期提交的 git user.name 误写成 suijiafneg（e / n 换位）。
+# mailmap 让 git log / shortlog / blame 按正确的名字显示，且不改写任何历史
+# ——重写历史会让全部 commit hash 变化并需要 force push，代价远大于收益。
+Jiafeng Sui <suijiafeng@hotmail.com> suijiafneg <suijiafeng@hotmail.com>
+Jiafeng Sui <suijiafeng@hotmail.com> 眭加凤 <suijiafeng@hotmail.com>

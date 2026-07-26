@@ -36,7 +36,7 @@ test('注册→出图→图库对比→充值 全链路', async ({ page }) => {
   await page.locator('input[type=file]').first().setInputFiles(path.join(__dirname, 'fixtures/room.jpg'))
   await expect(page.getByText('上传成功')).toBeVisible()
 
-  await page.getByRole('button', { name: /开始生成/ }).click()
+  await page.getByRole('button', { name: /生成效果/ }).click()
   // mock模式约2-3秒出图
   await expect(page.getByText('生成完成！')).toBeVisible({ timeout: 60000 })
   await expect(page.locator('.result-actions')).toBeVisible()

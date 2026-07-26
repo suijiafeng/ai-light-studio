@@ -26,6 +26,9 @@ export default defineConfig({
         AI_PROVIDER: 'mock',
         PAY_PROVIDER: 'mock',
         RATE_LIMIT_DISABLED: '1',
+        // 管理后台用例注册 admin@test.com 并断言可进后台；不在此显式声明的话
+        // 就会依赖开发者本机 server/.env 的 ADMIN_EMAILS，clean clone 上必然失败
+        ADMIN_EMAILS: 'admin@test.com',
         JWT_SECRET: 'e2e-secret'
       }
     },
