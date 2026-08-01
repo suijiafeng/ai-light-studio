@@ -22,6 +22,7 @@ router.get('/ai-mode', auth, adminOnly, (req, res) => {
     provider: settings.currentAiProvider(),
     available: {
       mock: true,
+      modelscope: !!cfg.ai.msKey,
       fal: !!cfg.ai.falKey,
       replicate: !!(cfg.ai.replicateToken && cfg.ai.replicateVersion)
     }
@@ -30,7 +31,8 @@ router.get('/ai-mode', auth, adminOnly, (req, res) => {
 
 router.post('/ai-mode', auth, adminOnly, (req, res) => {
   const { provider } = req.body || {};
-  if (!['mock', 'fal', 'replicate'].includes(provider)) return fail(res, 400, '无效的模式');
+  if (!['mock', 'fal', 'replicate', 'modelscope'].includes(provider)) return fail(res, 400, '无效的模式');
+  if (provider === 'modelscope' && !cfg.ai.msKey) return fail(res, 400, '未配置 MODELSCOPE_API_KEY，无法切换到魔搭真实出图');
   if (provider === 'fal' && !cfg.ai.falKey) return fail(res, 400, '未配置 FAL_API_KEY，无法切换到fal真实出图');
   if (provider === 'replicate' && !(cfg.ai.replicateToken && cfg.ai.replicateVersion)) {
     return fail(res, 400, '未配置 Replicate 参数，无法切换');

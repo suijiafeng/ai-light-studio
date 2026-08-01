@@ -60,7 +60,7 @@ macOS双击根目录的 **启动.command**，或终端运行 `./start.sh` ——
 |---|---|
 | 前端 | Vue3 + Vite + Pinia + Vue Router + Element Plus + Axios + SCSS |
 | 后端 | Node.js + Express + JWT + SQLite |
-| AI | IC-Light 灯光重绘模型（Replicate 可配置）+ 本地模拟模式 |
+| AI | 魔搭 Qwen-Image-Edit-2509（默认，免费额度 50 张/天）/ IC-Light（fal、Replicate 可配置）+ 本地模拟模式 |
 | 支付 | 微信 Native 支付 V3（真实对接）+ 沙箱模拟模式 |
 
 ## 目录结构

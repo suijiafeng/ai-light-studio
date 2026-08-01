@@ -10,12 +10,13 @@
           <span class="mode-label">AI出图模式</span>
           <el-radio-group :model-value="aiMode" @change="switchAiMode">
             <el-radio-button value="mock">演示模式</el-radio-button>
+            <el-radio-button value="modelscope" :disabled="!aiAvailable.modelscope">真实出图 · 魔搭(免费)</el-radio-button>
             <el-radio-button value="fal" :disabled="!aiAvailable.fal">真实出图 · fal</el-radio-button>
             <el-radio-button value="replicate" :disabled="!aiAvailable.replicate">Replicate</el-radio-button>
           </el-radio-group>
           <span class="text-secondary mode-tip">
             {{ aiMode === 'mock' ? '不消耗API额度，适合演示与联调' : '每次生成消耗平台额度' }}
-            <template v-if="!aiAvailable.fal">（fal未配置密钥）</template>
+            <template v-if="!aiAvailable.modelscope && !aiAvailable.fal">（未配置任何真实出图密钥）</template>
           </span>
         </div>
     <template v-if="data">
@@ -314,7 +315,7 @@ const tab = ref('overview')
 const users = ref([]); const userTotal = ref(0); const userPage = ref(1); const keyword = ref(''); const loadingUsers = ref(false)
 const gens = ref([])
 const errors = ref([])
-const aiMode = ref('mock'); const aiAvailable = ref({ mock: true, fal: false, replicate: false })
+const aiMode = ref('mock'); const aiAvailable = ref({ mock: true, modelscope: false, fal: false, replicate: false })
 
 const loadAiMode = async () => {
   try {

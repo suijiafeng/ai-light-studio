@@ -35,9 +35,13 @@ module.exports = {
   emailVerify: process.env.EMAIL_VERIFY === 'on',
 
   ai: {
-    provider: process.env.AI_PROVIDER || 'mock', // mock演示 | fal | replicate（后台可运行时切换）
+    provider: process.env.AI_PROVIDER || 'mock', // mock演示 | modelscope | fal | replicate（后台可运行时切换）
     falKey: process.env.FAL_API_KEY || '',
     falModel: process.env.FAL_MODEL || 'fal-ai/iclight-v2',
+    // 魔搭 ModelScope：Qwen-Image-Edit 图像编辑。免费额度实测图像生成仅 50 次/天（LLM 才是 2000 次/天）
+    msKey: process.env.MODELSCOPE_API_KEY || '',
+    msModel: process.env.MODELSCOPE_MODEL || 'Qwen/Qwen-Image-Edit-2509',
+    msBaseUrl: (process.env.MODELSCOPE_BASE_URL || 'https://api-inference.modelscope.cn/v1').replace(/\/$/, ''),
     replicateToken: process.env.REPLICATE_API_TOKEN || '',
     replicateVersion: process.env.REPLICATE_MODEL_VERSION || '',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 180000)

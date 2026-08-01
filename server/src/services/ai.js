@@ -175,6 +175,106 @@ async function falRelight(sourcePath, params, outPath) {
   return outPath;
 }
 
+// ================= 魔搭 ModelScope · Qwen-Image-Edit-2509（免费额度） =================
+// 踩过的坑（2026-07 实测，同一张客厅原图逐一对照）：
+//   1) 用基础版 Qwen-Image-Edit 结构漂移严重（墙面变木饰面、家具挪位、办公冷光整面墙裂）；
+//      换 -2509 后结构基本锁死，这是效果好坏的决定性因素。
+//   2) 长段英文 prompt 不如中文短指令，模型会把英文形容词当成"重新画一张"的自由度。
+//   3) 不写"不要死黑/不要过曝"，夜景暖光会暗到看不清家具；
+//      不写"接近中性白、不要蓝调"，6500K 会被渲染成饱和蓝。
+const MS_STYLE_PROMPTS = {
+  night_warm:  '把这个房间改成夜晚暖光效果：窗外是夜色，开启暖色筒灯、台灯和灯带，暖光在墙面和地面形成柔和光晕。',
+  daylight:    '把这个房间改成明亮的日间自然光效果：阳光从窗户射入，地面有柔和的阳光光斑，空间通透明亮、色彩干净。',
+  office_cool: '把这个房间改成办公照明效果：顶部灯具打出明亮均匀的冷白光，整个空间被照亮，阴影很淡、对比很低。整体是干净的冷白色调，像正午的日光灯，白墙保持接近纯白——不要偏黄，也不要变成蓝色。',
+  wall_wash:   '把这个房间改成氛围洗墙光效果：暖白光从上往下洗亮墙面，形成明显的明暗层次和光影渐变，顶部略暗、墙面被照亮。'
+};
+const MS_DIRECTIONS = {
+  none:   '环境光均匀分布', left: '主光源来自画面左侧', right: '主光源来自画面右侧',
+  top:    '主光源来自顶部天花', bottom: '光线从地面向上打'
+};
+// 不要把开尔文数字直接写进提示词！实测 6500K 会被模型当成"给整张图加蓝色滤镜"，
+// 房间整片发蓝；写成"色温约6500K（干净的冷白光，不要变成蓝色）"也压不住，
+// 只有彻底不提数字、改用色感描述词才出正常的冷白光。色温滑杆依然生效，只是转成措辞。
+const msTempWord = k => (k <= 2800 ? '光色是暖黄光' : k <= 3500 ? '光色是暖白光'
+  : k <= 4500 ? '光色是中性偏暖的白光' : k <= 6000 ? '光色是自然白光' : '光色是干净的冷白光（不是蓝色）');
+const msBrightWord = v => (v < 30 ? '整体偏暗但家具材质细节仍清晰可见，不要死黑'
+  : v > 70 ? '整体明亮通透，但不要过曝' : '明暗均衡、细节清晰');
+const msShadowWord = v => (v < 30 ? '光影柔和、过渡自然'
+  : v > 70 ? '光影对比强烈、明暗层次分明' : '有适度的明暗层次');
+
+function buildEditPrompt(params) {
+  const num = (v, def) => { const n = Number(v); return Number.isFinite(n) ? n : def; };
+  const styleKey = MS_STYLE_PROMPTS[params.style] ? params.style : 'night_warm';
+  const preset = STYLE_PRESETS[styleKey];
+  return [
+    MS_STYLE_PROMPTS[styleKey],
+    `${MS_DIRECTIONS[params.direction] || MS_DIRECTIONS.none}，${msTempWord(num(params.colorTemp, preset.temp))}，`,
+    `${msBrightWord(num(params.brightness, 50))}，${msShadowWord(num(params.intensity, 50))}。`,
+    '严格保持房间结构、家具位置、材质纹理、装饰品和拍摄视角完全不变，只改变照明。真实建筑摄影质感。'
+  ].join('');
+}
+
+async function modelscopeRelight(sourcePath, params, outPath) {
+  const { msKey, msModel, msBaseUrl, timeoutMs } = config.ai;
+  if (!msKey) throw new Error('魔搭未配置：请在 .env 中填写 MODELSCOPE_API_KEY');
+
+  // 入参图压到长边1024再转base64：请求体更小、出图更快，画质由 finalizeImage 统一把关
+  const inputBuf = await sharp(sourcePath).rotate()
+    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 90 }).toBuffer();
+  // 注意：sharp 的 metadata() 读的是原始文件头，不含 rotate() 的效果，
+  // 竖拍照片（EXIF orientation>=5）要手动换长宽，否则回贴尺寸会转90度
+  const rawMeta = await sharp(sourcePath).metadata();
+  const swapped = (rawMeta.orientation || 1) >= 5;
+  const srcW = swapped ? rawMeta.height : rawMeta.width;
+  const srcH = swapped ? rawMeta.width : rawMeta.height;
+  const dataUri = `data:image/jpeg;base64,${inputBuf.toString('base64')}`;
+
+  const submit = await fetch(`${msBaseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${msKey}`,
+      'Content-Type': 'application/json',
+      'X-ModelScope-Async-Mode': 'true' // 图像任务只支持异步，必须带
+    },
+    body: JSON.stringify({
+      model: msModel,
+      prompt: buildEditPrompt(params),
+      negative_prompt: '模糊, 低分辨率, 结构变形, 家具移位, 凭空多出的物体, 过曝, 死黑, 文字, 水印',
+      image_url: dataUri
+    })
+  });
+  if (!submit.ok) throw new Error(`魔搭提交任务失败: ${submit.status} ${(await submit.text()).slice(0, 200)}`);
+  const job = await submit.json();
+  if (!job.task_id) throw new Error(`魔搭未返回任务ID: ${JSON.stringify(job).slice(0, 200)}`);
+
+  const deadline = Date.now() + timeoutMs;
+  let imageUrl = null;
+  let failStreak = 0;
+  while (true) {
+    if (Date.now() > deadline) throw new Error('AI生成超时，请重试');
+    await new Promise(r => setTimeout(r, 3000));
+    const st = await (await fetch(`${msBaseUrl}/tasks/${job.task_id}`, {
+      headers: { Authorization: `Bearer ${msKey}`, 'X-ModelScope-Task-Type': 'image_generation' }
+    })).json();
+    if (st.task_status === 'SUCCEED') { imageUrl = (st.output_images || [])[0]; break; }
+    // 2509 的任务记录存活时间很短，偶发一次 FAILED 不一定是真失败，连续两次才判死
+    if (st.task_status === 'FAILED') {
+      if (++failStreak >= 2) throw new Error(`AI生成失败: ${JSON.stringify(st.errors || st.message || st.task_status).slice(0, 200)}`);
+    } else { failStreak = 0; }
+  }
+  if (!imageUrl) throw new Error('魔搭返回结果中没有图片');
+
+  const imgResp = await fetch(imageUrl);
+  if (!imgResp.ok) throw new Error('下载生成结果失败');
+  // 编辑模型可能改变输出尺寸，拉回原图长宽，前端"前后对比滑块"才能严丝合缝
+  const out = await sharp(Buffer.from(await imgResp.arrayBuffer()))
+    .resize(srcW, srcH, { fit: 'cover' })
+    .jpeg({ quality: 95 }).toBuffer();
+  fs.writeFileSync(outPath, out);
+  return outPath;
+}
+
 async function finalizeImage(outPath, premium) {
   const config2 = require('../config');
   const maxSize = premium ? config2.premiumMaxSize : config2.freeMaxSize;
@@ -220,10 +320,98 @@ async function applyMask(sourcePath, outPath, maskPath) {
   fs.writeFileSync(outPath, out);
 }
 
+const VALID_PROVIDERS = ['mock', 'fal', 'replicate', 'modelscope'];
+
+async function fetchLlmLightingRecommendation(luminance, warmthRatio) {
+  const { apiKey, baseUrl, model } = config.llm;
+  if (!apiKey) return null;
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: '你是资深室内照明设计师。根据照片的亮度与色调数据，给出灯光重绘参数推荐。只输出JSON，字段：style(night_warm|daylight|office_cool|wall_wash)、colorTemp(2000-8000整数)、brightness(0-100)、intensity(0-100)、detail(0-100)、direction(none|left|right|top|bottom)、reason(60字以内中文专业建议)。' },
+          { role: 'user', content: `照片平均亮度${(luminance * 100).toFixed(0)}/100（<35偏暗，>65偏亮），暖色比${warmthRatio.toFixed(2)}（>1偏暖）。请推荐灯光方案。` }
+        ]
+      })
+    });
+    if (!response.ok) return null;
+    const responseBody = await response.json();
+    const parsedRecommendation = JSON.parse(responseBody.choices?.[0]?.message?.content || '{}');
+    if (!STYLE_PRESETS[parsedRecommendation.style] || !DIRECTIONS[parsedRecommendation.direction] || !parsedRecommendation.reason) return null;
+    return {
+      recommendedParams: {
+        style: parsedRecommendation.style,
+        colorTemp: Math.min(8000, Math.max(2000, Number(parsedRecommendation.colorTemp) || 3000)),
+        brightness: Math.min(100, Math.max(0, Number(parsedRecommendation.brightness) || 50)),
+        intensity: Math.min(100, Math.max(0, Number(parsedRecommendation.intensity) || 50)),
+        detail: Math.min(100, Math.max(0, Number(parsedRecommendation.detail) || 50)),
+        direction: parsedRecommendation.direction
+      },
+      reason: String(parsedRecommendation.reason).slice(0, 120)
+    };
+  } catch (e) {
+    return null; // LLM异常自动降级规则版
+  }
+}
+
+function buildRuleBasedRecommendation(luminance, warmthRatio) {
+  if (luminance < 0.35) {
+    return {
+      recommendedParams: { style: 'night_warm', colorTemp: 3000, brightness: 68, intensity: 62, detail: 55, direction: 'top' },
+      reason: '照片整体偏暗，建议采用暖光提亮方案：3000K暖色温营造温馨感，亮度提升至68，顶部主光源均匀照亮空间。'
+    };
+  }
+  if (luminance > 0.65) {
+    return warmthRatio > 1.1
+      ? {
+          recommendedParams: { style: 'daylight', colorTemp: 5600, brightness: 50, intensity: 45, detail: 50, direction: 'none' },
+          reason: '照片光线充足，建议自然光方案微调：中性色温还原真实色彩，适当降低光影强度避免过曝。'
+        }
+      : {
+          recommendedParams: { style: 'office_cool', colorTemp: 6000, brightness: 48, intensity: 40, detail: 55, direction: 'none' },
+          reason: '照片光线充足，建议自然光方案微调：中性色温还原真实色彩，适当降低光影强度避免过曝。'
+        };
+  }
+  if (warmthRatio > 1.15) {
+    return {
+      recommendedParams: { style: 'wall_wash', colorTemp: 3500, brightness: 55, intensity: 68, detail: 60, direction: 'left' },
+      reason: '照片色调偏暖，适合氛围洗墙光方案：3500K配合较强光影层次，左侧光源突出墙面质感与空间纵深。'
+    };
+  }
+  return {
+    recommendedParams: { style: 'night_warm', colorTemp: 3200, brightness: 58, intensity: 55, detail: 55, direction: 'right' },
+    reason: '照片明暗均衡、色调中性，推荐夜景暖光方案：3200K暖光搭配右侧光源，营造居家氛围同时保留细节。'
+  };
+}
+
+async function adviseLighting(sourcePath) {
+  const colorStats = await sharp(sourcePath).stats();
+  const [meanRed, meanGreen, meanBlue] = colorStats.channels.map(channel => channel.mean);
+  const luminance = (0.299 * meanRed + 0.587 * meanGreen + 0.114 * meanBlue) / 255; // 0-1 平均亮度
+  const warmthRatio = meanRed / (meanBlue || 1); // >1 偏暖
+  const analysis = { luminance: Number(luminance.toFixed(2)), warmth: Number(warmthRatio.toFixed(2)) };
+
+  const llmRecommendation = await fetchLlmLightingRecommendation(luminance, warmthRatio);
+  if (llmRecommendation) {
+    return { recommend: llmRecommendation.recommendedParams, reason: llmRecommendation.reason, source: 'llm', analysis };
+  }
+
+  const ruleBasedRecommendation = buildRuleBasedRecommendation(luminance, warmthRatio);
+  return { recommend: ruleBasedRecommendation.recommendedParams, reason: ruleBasedRecommendation.reason, source: 'rules', analysis };
+}
+
 async function relight(sourcePath, params, outPath, options = {}) {
   const { currentAiProvider } = require('./settings');
-  const provider = currentAiProvider();
-  if (provider === 'fal') {
+  const override = params && VALID_PROVIDERS.includes(params.provider) ? params.provider : null;
+  const provider = override || currentAiProvider();
+  if (provider === 'modelscope') {
+    await modelscopeRelight(sourcePath, params, outPath);
+  } else if (provider === 'fal') {
     await falRelight(sourcePath, params, outPath);
   } else if (provider === 'replicate') {
     await replicateRelight(sourcePath, params, outPath);
@@ -237,4 +425,4 @@ async function relight(sourcePath, params, outPath, options = {}) {
   return outPath;
 }
 
-module.exports = { relight, STYLE_PRESETS, DIRECTIONS };
+module.exports = { relight, adviseLighting, STYLE_PRESETS, DIRECTIONS };
