@@ -63,10 +63,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apiOrders, apiCreditLogs } from '@/api'
 
-const tab = ref('orders')
+const route = useRoute()
+const tab = ref(route.query.tab === 'logs' ? 'logs' : 'orders')
 const orders = ref([]); const orderTotal = ref(0); const orderPage = ref(1); const loadingOrders = ref(false)
 const logs = ref([]); const logTotal = ref(0); const logPage = ref(1); const loadingLogs = ref(false)
 

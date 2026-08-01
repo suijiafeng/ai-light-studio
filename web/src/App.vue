@@ -21,9 +21,7 @@
           <el-popover v-if="userStore.isLogin && tasksStore.tasks.length" placement="bottom-end" width="300" trigger="click">
             <template #reference>
               <el-button circle text class="task-bell">
-                <el-icon :size="17" :class="{ 'is-loading': tasksStore.activeCount }">
-                  <Loading v-if="tasksStore.activeCount" /><Finished v-else />
-                </el-icon>
+                <el-icon :size="17" :class="{ 'bell-shake': tasksStore.activeCount }"><Bell /></el-icon>
                 <span v-if="tasksStore.activeCount" class="task-dot">{{ tasksStore.activeCount }}</span>
               </el-button>
             </template>
@@ -31,6 +29,7 @@
               <div class="task-title">任务中心</div>
               <div v-for="t in tasksStore.recent" :key="t.key" class="task-item" @click="t.link && $router.push(t.link)">
                 <el-icon v-if="t.status === 'running'" class="is-loading tk-run"><Loading /></el-icon>
+                <el-icon v-else-if="t.kind === 'reward'" class="tk-reward"><Coin /></el-icon>
                 <el-icon v-else-if="t.status === 'success'" class="tk-ok"><CircleCheckFilled /></el-icon>
                 <el-icon v-else class="tk-fail"><CircleCloseFilled /></el-icon>
                 <span class="task-label">{{ t.label }}</span>
@@ -46,9 +45,6 @@
           </el-tooltip>
 
           <template v-if="userStore.isLogin && userStore.user">
-            <el-tag effect="plain" class="credits-tag" @click="$router.push('/recharge')">
-              <el-icon><Coin /></el-icon>&nbsp;{{ userStore.credits }} 算力
-            </el-tag>
             <el-dropdown @command="onCommand">
               <span class="user-chip">
                 <el-avatar :size="30" class="avatar">{{ userStore.user.nickname?.[0]?.toUpperCase() }}</el-avatar>
@@ -57,6 +53,7 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="recharge"><el-icon><Coin /></el-icon>算力余额 {{ userStore.credits }}</el-dropdown-item>
                   <el-dropdown-item command="profile"><el-icon><User /></el-icon>个人中心</el-dropdown-item>
                   <el-dropdown-item command="orders"><el-icon><Tickets /></el-icon>订单与明细</el-dropdown-item>
                   <el-dropdown-item divided command="logout"><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item>
@@ -78,7 +75,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Loading, Finished, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
+import { Bell, Loading, Coin, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
 import { useTasksStore } from '@/stores/tasks'
@@ -96,6 +93,8 @@ const taskTime = t => {
 onMounted(() => {
   themeStore.apply()
   userStore.fetchMe()
+  tasksStore.resumePending()
+  tasksStore.checkRewards()
 })
 
 const onCommand = cmd => {
@@ -137,7 +136,6 @@ const onCommand = cmd => {
     a { padding: 6px 10px; font-size: 13px; white-space: nowrap; }
   }
   .user-chip .nickname { display: none; }
-  .credits-tag { font-size: 11px; }
 }
 .logo {
   display: flex; align-items: center; gap: 8px;
@@ -157,12 +155,21 @@ const onCommand = cmd => {
 }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .task-bell { position: relative; }
+.bell-shake { animation: bell-shake 1.8s ease-in-out infinite; transform-origin: top center; }
+@keyframes bell-shake {
+  0%, 60%, 100% { transform: rotate(0); }
+  65% { transform: rotate(-12deg); }
+  70% { transform: rotate(10deg); }
+  75% { transform: rotate(-8deg); }
+  80% { transform: rotate(6deg); }
+  85% { transform: rotate(-3deg); }
+  90% { transform: rotate(0); }
+}
 .task-dot {
   position: absolute; top: 0; right: 0; min-width: 15px; height: 15px; border-radius: 8px;
   background: var(--mk-primary); color: #fff; font-size: 10px; font-weight: 700;
   display: grid; place-items: center; padding: 0 3px; line-height: 1;
 }
-.credits-tag { cursor: pointer; }
 .user-chip {
   display: flex; align-items: center; gap: 8px; cursor: pointer; outline: none;
   .avatar { background: var(--mk-gradient); font-weight: 700; }
@@ -182,6 +189,7 @@ const onCommand = cmd => {
     .tk-run { color: #409eff; }
     .tk-ok { color: #67c23a; }
     .tk-fail { color: #f56c6c; }
+    .tk-reward { color: #e6a23c; }
     .task-label { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .task-time { color: var(--mk-text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
   }

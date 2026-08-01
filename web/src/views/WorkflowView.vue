@@ -3,6 +3,7 @@
         <div class="wf-bar">
       <el-button text @click="$router.push('/workflows')"><el-icon><ArrowLeft /></el-icon>返回</el-button>
       <input v-model="name" class="wf-name" placeholder="未命名工作流" maxlength="60" />
+      <el-tag v-if="aiProvider === 'mock'" type="warning" effect="plain" size="small" round>演示模式</el-tag>
       <div class="wf-bar-spacer"></div>
       <span v-if="dirty" class="wf-save-state dirty">未保存的更改…</span>
       <span v-else-if="autoSavedAt" class="wf-save-state">已自动保存 {{ autoSavedAt }}</span>
@@ -111,11 +112,12 @@ import NodePalette from '@/components/flow/NodePalette.vue'
 import NodeInspector from '@/components/flow/NodeInspector.vue'
 import BaseNode from '@/components/flow/BaseNode.vue'
 import RunPanel from '@/components/flow/RunPanel.vue'
-import { nodeDef, canConnect } from '@/components/flow/nodeTypes'
+import { NODE_TYPES, nodeDef, canConnect } from '@/components/flow/nodeTypes'
 import { templateByKey } from '@/components/flow/templates'
 import {
   apiWorkflowGet, apiWorkflowCreate, apiWorkflowUpdate, apiWorkflowRuns,
-  apiWorkflowEstimate, apiWorkflowRun, apiWorkflowRunStatus, apiWorkflowRunCancel, apiWorkflowRunEventsUrl
+  apiWorkflowEstimate, apiWorkflowRun, apiWorkflowRunStatus, apiWorkflowRunCancel, apiWorkflowRunEventsUrl,
+  apiStyles
 } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useTasksStore } from '@/stores/tasks'
@@ -125,7 +127,9 @@ const router = useRouter()
 const userStore = useUserStore()
 const tasksStore = useTasksStore()
 
-const nodeTypes = { 'image-input': markRaw(BaseNode), 'relight': markRaw(BaseNode), 'output': markRaw(BaseNode) }
+// BaseNode 是数据驱动的通用渲染器（按 NODE_TYPES[type] 取字段/图标），每种节点类型都复用同一个组件；
+// 直接从 NODE_TYPES 派生，新增节点类型时无需再手动同步这份注册表（此前 advise/style-fanout 就因漏注册而无法渲染）。
+const nodeTypes = Object.fromEntries(Object.keys(NODE_TYPES).map(type => [type, markRaw(BaseNode)]))
 
 const {
   onConnect, addEdges, addNodes, removeNodes, findNode,
@@ -138,6 +142,7 @@ const wfId = ref(route.params.id || '')
 const saving = ref(false)
 const dirty = ref(false)
 const selectedId = ref('')
+const aiProvider = ref('mock')
 
 // 小地图默认收起（小画布用不上），展开偏好记在本地
 const minimapOpen = ref(localStorage.getItem('wf_minimap') === 'on')
@@ -346,6 +351,7 @@ const loadGraph = g => {
 }
 
 onMounted(async () => {
+  apiStyles().then(data => { if (data.aiProvider) aiProvider.value = data.aiProvider }).catch(() => {})
   if (wfId.value) {
     try {
       const wf = await apiWorkflowGet(wfId.value)

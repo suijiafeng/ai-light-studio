@@ -3,6 +3,7 @@
     <div class="page-title">
       <el-icon class="mk-gradient-text"><Files /></el-icon> 批量处理
       <el-tag type="warning" effect="dark" size="small" round>会员/付费专属</el-tag>
+      <el-tag v-if="aiProvider === 'mock'" type="warning" effect="plain" size="small" round>演示模式</el-tag>
       <span class="text-secondary tip">一次最多20张，统一参数批量生成，每张{{ cost }}算力</span>
     </div>
 
@@ -58,13 +59,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiUpload, apiBulk, apiBatchStatus } from '@/api'
-import { compressImage, requestNotifyPermission, notifyDone } from '@/utils/media'
+import { apiUpload, apiBulk, apiBatchStatus, apiStyles } from '@/api'
+import { compressImage, requestNotifyPermission } from '@/utils/media'
 import { useUserStore } from '@/stores/user'
+import { useTasksStore } from '@/stores/tasks'
 
 const userStore = useUserStore()
+const tasksStore = useTasksStore()
 const files = ref([])
 const input = ref()
 const uploading = ref(false)
@@ -72,6 +75,7 @@ const upPercent = ref(0)
 const running = ref(false)
 const results = ref([])
 const cost = 5
+const aiProvider = ref('mock')
 let poll = null
 
 const styleNames = { night_warm: '夜景暖光', daylight: '日间自然光', office_cool: '办公冷光', wall_wash: '氛围洗墙光' }
@@ -85,6 +89,45 @@ const doneCount = computed(() => results.value.filter(r => r.status === 'success
 const allDone = computed(() => results.value.length && results.value.every(r => r.status !== 'processing'))
 
 onBeforeUnmount(() => clearInterval(poll))
+
+onMounted(async () => {
+  try {
+    const data = await apiStyles()
+    if (data.aiProvider) aiProvider.value = data.aiProvider
+  } catch (e) {  }
+  // 刷新页面会丢掉 results，但后端批量任务不受影响——从任务中心接回最近一个属于本页的任务
+  const RESUME_WINDOW_MS = 10 * 60 * 1000
+  const task = tasksStore.tasks
+    .filter(t => t.kind === 'batch' && t.sourcePath === '/batch')
+    .filter(t => t.status === 'running' || Date.now() - (t.finishedAt || 0) < RESUME_WINDOW_MS)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]
+  if (task) resumeTask(task)
+})
+
+const watchBatch = batchId => {
+  poll = setInterval(async () => {
+    try {
+      const data = await apiBatchStatus(batchId)
+      results.value = data.list
+      if (data.done) {
+        clearInterval(poll)
+        running.value = false
+        ElMessage.success(`批量完成：成功${data.list.filter(i => i.status === 'success').length}张`)
+      }
+    } catch (e) {  }
+  }, 2000)
+}
+const resumeTask = async task => {
+  if (task.status !== 'running') {
+    try {
+      const data = await apiBatchStatus(task.id)
+      results.value = data.list
+    } catch (e) {  }
+    return
+  }
+  running.value = true
+  watchBatch(task.id)
+}
 
 const pick = () => input.value.click()
 const onPick = async e => {
@@ -112,18 +155,8 @@ const run = async () => {
   try {
     const { batchId } = await apiBulk({ fileIds: files.value.map(f => f.fileId), params: { ...params } })
     userStore.fetchMe()
-    poll = setInterval(async () => {
-      try {
-        const data = await apiBatchStatus(batchId)
-        results.value = data.list
-        if (data.done) {
-          clearInterval(poll)
-          running.value = false
-          ElMessage.success(`批量完成：成功${data.list.filter(i => i.status === 'success').length}张`)
-          notifyDone('批量生成已完成')
-        }
-      } catch (e) {  }
-    }, 2000)
+    tasksStore.track('batch', batchId, `批量生成 · ${files.value.length}张`, '/history', '/batch')
+    watchBatch(batchId)
   } catch (e) {
     running.value = false
     if (e.code === 429) {
