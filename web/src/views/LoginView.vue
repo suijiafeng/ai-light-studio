@@ -93,7 +93,7 @@ import { useUserStore } from '@/stores/user'
 import LegalDocs from '@/components/LegalDocs.vue'
 import PasswordInput from '@/components/PasswordInput.vue'
 import { isValidPassword, passwordStrength, PASSWORD_RULE_MSG } from '@/utils/password'
-import { apiSendCode, apiResetPassword, apiRegister } from '@/api'
+import { apiSendCode, apiResetPassword } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,7 +237,11 @@ const legalConfirm = ref({ terms: false, privacy: false })
 const openLegal = tab => { legalTab.value = tab; legalVisible.value = true }
 
 const submit = async () => {
-  await formRef.value.validate()
+  try {
+    await formRef.value.validate()
+  } catch (e) {
+    return // 校验不通过：el-form 已就地展示各字段错误提示，这里无需额外处理
+  }
   if (isRegister.value && !agreed.value) return ElMessage.warning('请先阅读并勾选同意用户协议与隐私政策')
   if (isRegister.value && needCode.value && !form.code) {
     return ElMessage.warning('该邮箱需邮箱验证码，请点击“获取验证码”')
@@ -245,15 +249,8 @@ const submit = async () => {
   loading.value = true
   try {
     if (isRegister.value) {
-      await apiRegister({ ...form, inviteCode: route.query.invite || undefined })
-      ElMessage.success('注册成功，已赠送免费算力，请登录')
-      isRegister.value = false
-      form.password = ''
-      form.confirmPassword = ''
-      form.code = ''
-      needCode.value = false
-      agreed.value = false
-      return
+      await userStore.register({ ...form, inviteCode: route.query.invite || undefined })
+      ElMessage.success('注册成功，已赠送免费算力！')
     } else {
       await userStore.login(form)
       ElMessage.success('登录成功')
