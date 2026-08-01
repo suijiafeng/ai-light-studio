@@ -43,6 +43,26 @@ export const NODE_TYPES = {
       ] }
     ]
   },
+  'advise': {
+    label: 'AI灯光顾问',
+    icon: 'Opportunity',
+    accent: '#f2994a',
+    desc: '分析上游照片的亮度与色调，输出推荐的打光参数与理由（未配置LLM时自动降级为规则推荐）',
+    inputs: [{ name: 'image', type: 'image', required: true }],
+    outputs: [{ name: 'params', type: 'params' }],
+    data: () => ({}),
+    fields: []
+  },
+  'style-fanout': {
+    label: '多风格并行',
+    icon: 'Grid',
+    accent: '#5b8def',
+    desc: '并行生成全部预设风格的效果图，一次运行即可横向对比',
+    inputs: [{ name: 'image', type: 'image', required: true }],
+    outputs: [{ name: 'images', type: 'any' }],
+    data: () => ({}),
+    fields: []
+  },
   'output': {
     label: '输出',
     icon: 'Download',
@@ -54,7 +74,7 @@ export const NODE_TYPES = {
     fields: []
   }
 }
-export const PALETTE = ['image-input', 'relight', 'output']
+export const PALETTE = ['image-input', 'relight', 'advise', 'style-fanout', 'output']
 
 export const nodeDef = type => NODE_TYPES[type] || null
 export function canConnect(sourceType, targetType) {

@@ -79,6 +79,10 @@
           :preview-src-list="[runOutput.url]"
           preview-teleported
         />
+        <div v-else-if="runOutput" class="wf-preview wf-out-empty">
+          <el-icon><Check /></el-icon>
+          <span>已完成 · 详情见右侧面板</span>
+        </div>
         <div v-else class="wf-preview wf-out-empty">
           <el-icon><Download /></el-icon>
           <span>待生成</span>

@@ -196,3 +196,127 @@ describe('工作流执行引擎', () => {
     expect(cancelAgain.body.code).toBe(400)
   })
 })
+
+describe('工作流节点：AI灯光顾问 advise', () => {
+  it('image-input → advise → output 跑通，输出推荐参数与理由，消耗1算力且不退款', async () => {
+    const { token } = await register('wfadvise1@test.com')
+    const fileId = await uploadImage(token)
+    const graph = {
+      version: 1,
+      nodes: [
+        { id: 'n1', type: 'image-input', position: { x: 0, y: 0 }, data: { fileId } },
+        { id: 'n2', type: 'advise', position: { x: 200, y: 0 }, data: {} },
+        { id: 'n3', type: 'output', position: { x: 400, y: 0 }, data: {} }
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2' },
+        { id: 'e2', source: 'n2', target: 'n3' }
+      ]
+    }
+    const wfId = await createWorkflow(token, graph)
+    const before = await balance(token)
+
+    const runRes = await request(app).post(`/api/workflow/${wfId}/run`).set('Authorization', `Bearer ${token}`)
+    expect(runRes.body.code).toBe(200)
+    const { run, nodes } = await waitRun(token, runRes.body.data.runId)
+    expect(run.status).toBe('success')
+
+    const adviseNode = nodes.find(n => n.nodeId === 'n2')
+    expect(adviseNode.status).toBe('success')
+    expect(adviseNode.cost).toBe(1)
+    expect(adviseNode.output.recommend).toHaveProperty('style')
+    expect(adviseNode.output.reason.length).toBeGreaterThan(10)
+    expect(run.outputs[0].recommend).toHaveProperty('style')
+
+    expect(await balance(token)).toBe(before - 1)
+  })
+})
+
+describe('工作流节点：多风格并行 style-fanout', () => {
+  it('image-input → style-fanout → output 跑通，一次性并行产出全部预设风格', async () => {
+    const { token } = await register('wffanout1@test.com')
+    const fileId = await uploadImage(token)
+    const graph = {
+      version: 1,
+      nodes: [
+        { id: 'n1', type: 'image-input', position: { x: 0, y: 0 }, data: { fileId } },
+        { id: 'n2', type: 'style-fanout', position: { x: 200, y: 0 }, data: {} },
+        { id: 'n3', type: 'output', position: { x: 400, y: 0 }, data: {} }
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2' },
+        { id: 'e2', source: 'n2', target: 'n3' }
+      ]
+    }
+    const wfId = await createWorkflow(token, graph)
+    const before = await balance(token)
+
+    const runRes = await request(app).post(`/api/workflow/${wfId}/run`).set('Authorization', `Bearer ${token}`)
+    const { run, nodes } = await waitRun(token, runRes.body.data.runId)
+    expect(run.status).toBe('success')
+
+    const fanoutNode = nodes.find(n => n.nodeId === 'n2')
+    expect(fanoutNode.status).toBe('success')
+    expect(fanoutNode.cost).toBe(8) // MULTI_COST 测试环境固定为8
+    expect(fanoutNode.output.images.length).toBe(4) // STYLE_PRESETS 当前共4种预设风格
+    fanoutNode.output.images.forEach(img => {
+      expect(img.url).toContain('/results/')
+      expect(img).toHaveProperty('name')
+    })
+
+    expect(await balance(token)).toBe(before - 8)
+  })
+})
+
+describe('工作流节点：relight 支持逐节点 provider 覆盖', () => {
+  it('节点显式指定 provider=fal 时应覆盖全局mock设置（测试环境未配fal密钥故失败并全额退款）', async () => {
+    const { token } = await register('wfprovider1@test.com')
+    const fileId = await uploadImage(token)
+    const graph = {
+      version: 1,
+      nodes: [
+        { id: 'n1', type: 'image-input', position: { x: 0, y: 0 }, data: { fileId } },
+        { id: 'n2', type: 'relight', position: { x: 200, y: 0 }, data: relightData({ provider: 'fal' }) },
+        { id: 'n3', type: 'output', position: { x: 400, y: 0 }, data: {} }
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2' },
+        { id: 'e2', source: 'n2', target: 'n3' }
+      ]
+    }
+    const wfId = await createWorkflow(token, graph)
+    const before = await balance(token)
+
+    const runRes = await request(app).post(`/api/workflow/${wfId}/run`).set('Authorization', `Bearer ${token}`)
+    const { run, nodes } = await waitRun(token, runRes.body.data.runId)
+
+    // 若覆盖未生效，节点会静默走全局mock分支并成功；覆盖生效则应因fal未配置密钥而失败
+    expect(run.status).toBe('failed')
+    const relightNode = nodes.find(n => n.nodeId === 'n2')
+    expect(relightNode.status).toBe('failed')
+
+    expect(await balance(token)).toBe(before) // 失败节点全额退款
+  })
+
+  it('节点 provider=default 或未指定时，仍按全局mock设置正常出图', async () => {
+    const { token } = await register('wfprovider2@test.com')
+    const fileId = await uploadImage(token)
+    const graph = {
+      version: 1,
+      nodes: [
+        { id: 'n1', type: 'image-input', position: { x: 0, y: 0 }, data: { fileId } },
+        { id: 'n2', type: 'relight', position: { x: 200, y: 0 }, data: relightData({ provider: 'default' }) },
+        { id: 'n3', type: 'output', position: { x: 400, y: 0 }, data: {} }
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2' },
+        { id: 'e2', source: 'n2', target: 'n3' }
+      ]
+    }
+    const wfId = await createWorkflow(token, graph)
+    const runRes = await request(app).post(`/api/workflow/${wfId}/run`).set('Authorization', `Bearer ${token}`)
+    const { run, nodes } = await waitRun(token, runRes.body.data.runId)
+    expect(run.status).toBe('success')
+    expect(nodes.find(n => n.nodeId === 'n2').status).toBe('success')
+  })
+})

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../../config');
-const { relight } = require('../ai');
+const { relight, adviseLighting, STYLE_PRESETS } = require('../ai');
 const { enqueueGen } = require('../genQueue');
 function userError(message) {
   const err = new Error(message);
@@ -37,6 +37,38 @@ const NODE_DEFS = {
       const outPath = path.join(config.resultDir, outName);
       await enqueueGen(() => relight(srcPath, data || {}, outPath, { premium: ctx.premium }));
       return { image: outPath, url: `/results/${outName}` };
+    }
+  },
+  'advise': {
+    type: 'advise',
+    inputs: [{ name: 'image', type: 'image', required: true }],
+    outputs: [{ name: 'params', type: 'params' }],
+    cacheable: true,
+    cost: () => 1,
+    async execute(data, ctx) {
+      const sourceImagePath = ctx && ctx.upstream && ctx.upstream.image;
+      if (!sourceImagePath) throw userError('灯光顾问节点未获取到上游图片，请检查连线');
+      return adviseLighting(sourceImagePath);
+    }
+  },
+  'style-fanout': {
+    type: 'style-fanout',
+    inputs: [{ name: 'image', type: 'image', required: true }],
+    outputs: [{ name: 'images', type: 'any' }],
+    cacheable: true,
+    cost: () => config.multiCost,
+    async execute(data, ctx) {
+      const sourceImagePath = ctx && ctx.upstream && ctx.upstream.image;
+      if (!sourceImagePath) throw userError('多风格节点未获取到上游图片，请检查连线');
+      const stylePresetKeys = Object.keys(STYLE_PRESETS);
+      const generatedImages = await Promise.all(stylePresetKeys.map(async stylePresetKey => {
+        const outputFileName = `wf-${ctx.runId}-${ctx.nodeId}-${stylePresetKey}.jpg`;
+        const outputFilePath = path.join(config.resultDir, outputFileName);
+        const relightParams = { ...(data || {}), style: stylePresetKey, colorTemp: STYLE_PRESETS[stylePresetKey].temp };
+        await enqueueGen(() => relight(sourceImagePath, relightParams, outputFilePath, { premium: ctx.premium }));
+        return { style: stylePresetKey, name: STYLE_PRESETS[stylePresetKey].name, url: `/results/${outputFileName}` };
+      }));
+      return { images: generatedImages };
     }
   },
   'output': {

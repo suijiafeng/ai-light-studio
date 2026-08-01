@@ -36,6 +36,28 @@
         </a>
       </div>
 
+            <div v-if="runOutput?.images?.length" class="insp-grid">
+        <div v-for="generatedImage in runOutput.images" :key="generatedImage.style" class="insp-grid-item">
+          <el-image
+            class="insp-grid-img"
+            :src="generatedImage.url"
+            fit="cover"
+            :preview-src-list="runOutput.images.map(i => i.url)"
+            preview-teleported
+          />
+          <span class="insp-grid-label">{{ generatedImage.name }}</span>
+        </div>
+      </div>
+
+            <div v-if="runOutput?.recommend && runOutput?.reason" class="insp-advise">
+        <span class="insp-advise-badge" :class="runOutput.source">{{ runOutput.source === 'llm' ? 'LLM推荐' : '规则推荐' }}</span>
+        <div class="insp-advise-row"><span>风格</span><b>{{ styleLabel(runOutput.recommend.style) }}</b></div>
+        <div class="insp-advise-row"><span>色温</span><b>{{ runOutput.recommend.colorTemp }}K</b></div>
+        <div class="insp-advise-row"><span>亮度</span><b>{{ runOutput.recommend.brightness }}</b></div>
+        <div class="insp-advise-row"><span>光源方向</span><b>{{ directionLabel(runOutput.recommend.direction) }}</b></div>
+        <p class="insp-advise-reason">{{ runOutput.reason }}</p>
+      </div>
+
             <div v-if="node.type === 'image-input'" class="insp-upload">
         <div class="up-preview" v-if="node.data.url">
           <img :src="node.data.url" alt="" />
@@ -69,7 +91,7 @@
         />
       </div>
 
-      <div v-if="node.type === 'output' && !runOutput?.url" class="insp-note">
+      <div v-if="node.type === 'output' && !runOutput?.url && !runOutput?.images?.length && !runOutput?.recommend" class="insp-note">
         输出节点用于标记最终产物，无需配置。运行成功后这里会直接显示生成图。
       </div>
     </template>
@@ -81,7 +103,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Pointer, Delete, Upload, Download, CopyDocument } from '@element-plus/icons-vue'
 import * as Icons from '@element-plus/icons-vue'
-import { nodeDef } from './nodeTypes'
+import { nodeDef, STYLE_OPTIONS, DIRECTION_OPTIONS } from './nodeTypes'
 import { apiUpload } from '@/api'
 import { compressImage } from '@/utils/media'
 
@@ -94,6 +116,8 @@ const runOutput = computed(() => {
   const s = props.node?.data?.runStatus
   return (s && (s.status === 'success' || s.status === 'cached')) ? s.output : null
 })
+const styleLabel = key => STYLE_OPTIONS.find(o => o.key === key)?.name || key
+const directionLabel = key => DIRECTION_OPTIONS.find(o => o.key === key)?.name || key
 
 const fileEl = ref()
 const uploading = ref(false)
@@ -146,6 +170,22 @@ const onFile = async e => {
   padding: 7px; border: 1px solid var(--mk-border); border-radius: 6px; transition: border-color .15s;
 }
 .insp-result-dl:hover { border-color: var(--mk-primary); }
+.insp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.insp-grid-item { display: flex; flex-direction: column; gap: 4px; }
+.insp-grid-img {
+  width: 100%; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden;
+  background: rgba(0, 0, 0, .12); display: block; cursor: zoom-in;
+}
+.insp-grid-label { font-size: 11.5px; color: var(--mk-text-2); text-align: center; }
+.insp-advise { display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 10px; background: var(--mk-bg); border: 1px solid var(--mk-border); }
+.insp-advise-badge {
+  align-self: flex-start; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  background: color-mix(in srgb, var(--mk-primary) 16%, transparent); color: var(--mk-primary);
+}
+.insp-advise-badge.rules { background: color-mix(in srgb, var(--mk-text-2) 16%, transparent); color: var(--mk-text-2); }
+.insp-advise-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--mk-text-2); }
+.insp-advise-row b { color: var(--mk-text); font-weight: 650; }
+.insp-advise-reason { font-size: 12.5px; line-height: 1.6; color: var(--mk-text); margin: 2px 0 0; }
 .insp-upload { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .up-preview { width: 100%; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, .12); }
 .up-preview img { width: 100%; height: 100%; object-fit: contain; }

@@ -8,7 +8,7 @@ const config = require('../config');
 const { ok, fail } = require('../utils/response');
 const { auth } = require('../middleware/auth');
 const { changeCredits, isPremium } = require('../services/credits');
-const { relight, STYLE_PRESETS, DIRECTIONS } = require('../services/ai');
+const { relight, adviseLighting, STYLE_PRESETS, DIRECTIONS } = require('../services/ai');
 const { rateLimit } = require('../middleware/rateLimit');
 const { enqueueGen } = require('../services/genQueue');
 
@@ -204,74 +204,13 @@ router.post('/bulk', auth, genLimit, (req, res) => {
   const ids = sources.map(sp => startJob({ userId: req.user.id, sourcePath: sp, params, cost: perCost, premium, batchId }));
   return ok(res, { batchId, ids, cost: total }, '批量任务已提交');
 });
-async function llmAdvise(lum, warmth) {
-  const { apiKey, baseUrl, model } = config.llm;
-  if (!apiKey) return null;
-  try {
-    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: '你是资深室内照明设计师。根据照片的亮度与色调数据，给出灯光重绘参数推荐。只输出JSON，字段：style(night_warm|daylight|office_cool|wall_wash)、colorTemp(2000-8000整数)、brightness(0-100)、intensity(0-100)、detail(0-100)、direction(none|left|right|top|bottom)、reason(60字以内中文专业建议)。' },
-          { role: 'user', content: `照片平均亮度${(lum * 100).toFixed(0)}/100（<35偏暗，>65偏亮），暖色比${warmth.toFixed(2)}（>1偏暖）。请推荐灯光方案。` }
-        ]
-      })
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content || '{}');
-    if (!STYLE_PRESETS[parsed.style] || !DIRECTIONS[parsed.direction] || !parsed.reason) return null;
-    return {
-      rec: {
-        style: parsed.style,
-        colorTemp: Math.min(8000, Math.max(2000, Number(parsed.colorTemp) || 3000)),
-        brightness: Math.min(100, Math.max(0, Number(parsed.brightness) || 50)),
-        intensity: Math.min(100, Math.max(0, Number(parsed.intensity) || 50)),
-        detail: Math.min(100, Math.max(0, Number(parsed.detail) || 50)),
-        direction: parsed.direction
-      },
-      reason: String(parsed.reason).slice(0, 120)
-    };
-  } catch (e) {
-    return null; // LLM异常自动降级规则版
-  }
-}
 router.post('/advise', auth, async (req, res) => {
   const { fileId } = req.body || {};
   const p = fileId && path.join(config.uploadDir, path.basename(fileId));
   if (!p || !fs.existsSync(p)) return fail(res, 400, '请先上传图片');
   try {
-    const sharp = require('sharp');
-    const stats = await sharp(p).stats();
-    const [r, g, b] = stats.channels.map(c => c.mean);
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255; // 0-1 平均亮度
-    const warmth = r / (b || 1); // >1 偏暖
-    const llm = await llmAdvise(lum, warmth);
-    if (llm) {
-      return ok(res, { recommend: llm.rec, reason: llm.reason, source: 'llm', analysis: { luminance: Number(lum.toFixed(2)), warmth: Number(warmth.toFixed(2)) } });
-    }
-
-    let rec, reason;
-    if (lum < 0.35) {
-      rec = { style: 'night_warm', colorTemp: 3000, brightness: 68, intensity: 62, detail: 55, direction: 'top' };
-      reason = '照片整体偏暗，建议采用暖光提亮方案：3000K暖色温营造温馨感，亮度提升至68，顶部主光源均匀照亮空间。';
-    } else if (lum > 0.65) {
-      rec = warmth > 1.1
-        ? { style: 'daylight', colorTemp: 5600, brightness: 50, intensity: 45, detail: 50, direction: 'none' }
-        : { style: 'office_cool', colorTemp: 6000, brightness: 48, intensity: 40, detail: 55, direction: 'none' };
-      reason = '照片光线充足，建议自然光方案微调：中性色温还原真实色彩，适当降低光影强度避免过曝。';
-    } else if (warmth > 1.15) {
-      rec = { style: 'wall_wash', colorTemp: 3500, brightness: 55, intensity: 68, detail: 60, direction: 'left' };
-      reason = '照片色调偏暖，适合氛围洗墙光方案：3500K配合较强光影层次，左侧光源突出墙面质感与空间纵深。';
-    } else {
-      rec = { style: 'night_warm', colorTemp: 3200, brightness: 58, intensity: 55, detail: 55, direction: 'right' };
-      reason = '照片明暗均衡、色调中性，推荐夜景暖光方案：3200K暖光搭配右侧光源，营造居家氛围同时保留细节。';
-    }
-    return ok(res, { recommend: rec, reason, source: 'rules', analysis: { luminance: Number(lum.toFixed(2)), warmth: Number(warmth.toFixed(2)) } });
+    const result = await adviseLighting(p);
+    return ok(res, result);
   } catch (e) {
     return fail(res, 500, '图片分析失败：' + e.message);
   }
