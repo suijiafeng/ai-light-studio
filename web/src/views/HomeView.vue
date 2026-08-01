@@ -27,10 +27,21 @@
 
     <section class="page-container">
       <h2 class="sec-title">灯光方案模板 · 点击即用同款参数</h2>
+      <p class="sec-sub text-secondary">下面六张都是<strong>同一间客厅</strong>的真实出图——只换灯光方案，不换房间，这样才看得出每套模板到底改了什么。点右上角「提示词」可查看并复制该方案的完整提示词。</p>
       <div class="tpl-grid">
         <div v-for="t in templates" :key="t.name" class="mk-card hoverable tpl" @click="useTemplate(t)">
-          <div class="tpl-preview" :style="{ background: t.bg }">
-            <el-icon :size="26"><component :is="t.icon" /></el-icon>
+          <div class="tpl-preview">
+            <img :src="t.img" :alt="t.name + ' 灯光效果预览'" loading="lazy" />
+            <el-popover placement="top" :width="340" trigger="click" popper-class="tpl-prompt-pop">
+              <template #reference>
+                <span class="prompt-chip" @click.stop>提示词</span>
+              </template>
+              <div @click.stop>
+                <div class="pop-head">{{ t.name }} · 提示词模板</div>
+                <p class="pop-text">{{ t.prompt }}</p>
+                <el-button size="small" type="primary" plain round @click.stop="copyPrompt(t)">复制提示词</el-button>
+              </div>
+            </el-popover>
           </div>
           <h3 class="ellipsis">{{ t.name }}</h3>
           <p class="text-secondary clamp-2">{{ t.desc }}</p>
@@ -43,20 +54,36 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { buildLightPrompt } from '@/utils/lightPrompt'
 
 const router = useRouter()
 const userStore = useUserStore()
 const go = () => router.push(userStore.isLogin ? '/studio' : '/login')
 
-const templates = [
-  { name: '客厅暖夜', icon: 'Moon', tag: '夜景暖光', desc: '温馨居家夜晚氛围，适合客厅、卧室', bg: 'linear-gradient(135deg,#f6b26b,#e06666)', params: { style: 'night_warm', colorTemp: 3000, brightness: 62, intensity: 60, detail: 55, direction: 'top' } },
-  { name: '通透日光', icon: 'Sunny', tag: '日间自然光', desc: '明亮通透的白天效果，适合样板间展示', bg: 'linear-gradient(135deg,#6fa8dc,#93c47d)', params: { style: 'daylight', colorTemp: 5600, brightness: 70, intensity: 45, detail: 50, direction: 'none' } },
-  { name: '高效办公', icon: 'OfficeBuilding', tag: '办公冷光', desc: '均匀明亮的冷白光，适合办公学习空间', bg: 'linear-gradient(135deg,#76a5f5,#8ed1fc)', params: { style: 'office_cool', colorTemp: 6500, brightness: 65, intensity: 40, detail: 60, direction: 'top' } },
-  { name: '艺术洗墙', icon: 'Brush', tag: '氛围洗墙光', desc: '突出墙面质感与陈列，适合展厅背景墙', bg: 'linear-gradient(135deg,#b28df7,#f78db2)', params: { style: 'wall_wash', colorTemp: 3500, brightness: 52, intensity: 72, detail: 62, direction: 'left' } },
-  { name: '餐厅微醺', icon: 'Coffee', tag: '夜景暖光', desc: '低亮度高氛围，适合餐厅、酒吧', bg: 'linear-gradient(135deg,#e69138,#a64d79)', params: { style: 'night_warm', colorTemp: 2800, brightness: 45, intensity: 70, detail: 50, direction: 'bottom' } },
-  { name: '民宿清晨', icon: 'Cloudy', tag: '日间自然光', desc: '柔和自然光感，适合民宿房源照片', bg: 'linear-gradient(135deg,#9fc5e8,#ffe599)', params: { style: 'daylight', colorTemp: 5000, brightness: 58, intensity: 38, detail: 45, direction: 'right' } }
+// 预览图：同一张客厅原图 + 下面各自的 params，用魔搭 Qwen-Image-Edit-2509 真实跑出来的，
+// 不是占位图也不是别处扒的图。换新图时请沿用同一张原图，否则用户没法横向比较。
+// prompt 由 buildLightPrompt(params) 现算，和后端 ai.js 的 buildEditPrompt 同源，改参数即同步。
+const rawTemplates = [
+  { name: '客厅暖夜', img: '/templates/living_night.jpg', tag: '夜景暖光', desc: '温馨居家夜晚氛围，适合客厅、卧室', params: { style: 'night_warm', colorTemp: 3000, brightness: 62, intensity: 60, detail: 55, direction: 'top' } },
+  { name: '通透日光', img: '/templates/bright_day.jpg', tag: '日间自然光', desc: '明亮通透的白天效果，适合样板间展示', params: { style: 'daylight', colorTemp: 5600, brightness: 70, intensity: 45, detail: 50, direction: 'none' } },
+  { name: '高效办公', img: '/templates/office.jpg', tag: '办公冷光', desc: '均匀明亮的冷白光，适合办公学习空间', params: { style: 'office_cool', colorTemp: 6500, brightness: 65, intensity: 40, detail: 60, direction: 'top' } },
+  { name: '艺术洗墙', img: '/templates/wall_art.jpg', tag: '氛围洗墙光', desc: '突出墙面质感与陈列，适合展厅背景墙', params: { style: 'wall_wash', colorTemp: 3500, brightness: 52, intensity: 72, detail: 62, direction: 'left' } },
+  { name: '餐厅微醺', img: '/templates/dining.jpg', tag: '夜景暖光', desc: '低亮度高氛围，适合餐厅、酒吧', params: { style: 'night_warm', colorTemp: 2800, brightness: 45, intensity: 70, detail: 50, direction: 'bottom' } },
+  { name: '民宿清晨', img: '/templates/bnb_morning.jpg', tag: '日间自然光', desc: '柔和自然光感，适合民宿房源照片', params: { style: 'daylight', colorTemp: 5000, brightness: 58, intensity: 38, detail: 45, direction: 'right' } }
 ]
+const templates = rawTemplates.map(t => ({ ...t, prompt: buildLightPrompt(t.params) }))
+
+const copyPrompt = async t => {
+  try {
+    await navigator.clipboard.writeText(t.prompt)
+    ElMessage.success(`已复制「${t.name}」的提示词`)
+  } catch (e) {
+    ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选中复制')
+  }
+}
+
 const useTemplate = t => router.push({ path: '/studio', query: { ...t.params } })
 
 const features = [
@@ -77,16 +104,24 @@ const features = [
   .hero-tip { margin-top: 22px; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 }
 .sec-title { font-size: 18px; text-align: center; margin: 6px 0 20px; }
+.sec-sub { font-size: 13px; line-height: 1.8; margin: -6px 0 18px; }
 .tpl-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
   margin-bottom: 30px;
   .tpl {
     text-align: center; cursor: pointer; padding: 18px 14px;
     .tpl-preview {
-      height: 76px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      color: #fff; margin-bottom: 12px;
+      position: relative; border-radius: 10px; overflow: hidden; margin-bottom: 12px;
+      img { width: 100%; display: block; aspect-ratio: 1236 / 800; object-fit: cover; }
+      .prompt-chip {
+        position: absolute; right: 8px; top: 8px; padding: 3px 9px;
+        border-radius: 20px; font-size: 11px; line-height: 1.5; color: #fff;
+        background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.28);
+        backdrop-filter: blur(6px); cursor: pointer; transition: background 0.2s;
+        &:hover { background: rgba(0, 0, 0, 0.7); }
+      }
     }
     h3 { margin: 0 0 4px; font-size: 15px; }
     p { font-size: 12px; margin: 0 0 8px; line-height: 1.6; }
@@ -102,6 +137,17 @@ const features = [
     .feature-icon { color: var(--mk-primary); }
     h3 { margin: 14px 0 8px; font-size: 16px; }
     p { font-size: 13px; line-height: 1.8; margin: 0; }
+  }
+}
+</style>
+
+<style lang="scss">
+/* popover 内容被 teleport 到 body，必须放非 scoped 块里才生效 */
+.tpl-prompt-pop {
+  .pop-head { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .pop-text {
+    font-size: 12px; line-height: 1.8; margin: 0 0 12px;
+    white-space: pre-wrap; word-break: break-word; opacity: 0.85;
   }
 }
 </style>
