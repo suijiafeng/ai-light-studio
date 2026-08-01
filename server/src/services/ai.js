@@ -45,19 +45,24 @@ async function mockRelight(sourcePath, params, outPath) {
   const img = sharp(sourcePath).rotate();
   const meta = await img.metadata();
   const w = meta.width || 1024, h = meta.height || 768;
-  const glowOpacity = (0.10 + intensity * 0.25).toFixed(3);
+  const glowOpacity = (0.14 + intensity * 0.30).toFixed(3);
+  // 色彩层用 soft-light 混合、不用 sharp 自带的 tint()——tint 是整图硬性重新着色，
+  // 明暗细节和物体本身的固有色全被抹平成一片单色，演示模式看着就像加了层滤镜而不是"换光"；
+  // soft-light 是真正的调色混合，会保留原图的明暗层次，只是把色调往目标色温上推
+  const gradeOpacity = (0.32 + detail * 0.22).toFixed(3);
   const overlay = Buffer.from(
     `<svg width="${w}" height="${h}">
       <defs>
-        <radialGradient id="g" cx="${dir.cx}" cy="${dir.cy}" r="85%">
+        <radialGradient id="g" cx="${dir.cx}" cy="${dir.cy}" r="80%">
           <stop offset="0%" stop-color="rgb(${tint.r},${tint.g},${tint.b})" stop-opacity="${glowOpacity}"/>
-          <stop offset="70%" stop-color="rgb(${tint.r},${tint.g},${tint.b})" stop-opacity="0"/>
+          <stop offset="65%" stop-color="rgb(${tint.r},${tint.g},${tint.b})" stop-opacity="0"/>
         </radialGradient>
         <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="black" stop-opacity="0"/>
-          <stop offset="100%" stop-color="black" stop-opacity="${(intensity * 0.28).toFixed(3)}"/>
+          <stop offset="100%" stop-color="black" stop-opacity="${(intensity * 0.30).toFixed(3)}"/>
         </linearGradient>
       </defs>
+      <rect width="100%" height="100%" fill="rgb(${tint.r},${tint.g},${tint.b})" fill-opacity="${gradeOpacity}"/>
       <rect width="100%" height="100%" fill="url(#g)"/>
       <rect width="100%" height="100%" fill="url(#v)"/>
     </svg>`
@@ -66,11 +71,10 @@ async function mockRelight(sourcePath, params, outPath) {
   await img
     .modulate({
       brightness: Math.min(Math.max(brightness, 0.4), 1.8),
-      saturation: style.saturation * (0.85 + detail * 0.4)
+      saturation: style.saturation * (0.9 + detail * 0.3)
     })
-    .tint(tint)
-    .gamma(1 + (detail - 0.5) * 0.5)
-    .composite([{ input: overlay, blend: 'over' }])
+    .gamma(1 + (detail - 0.5) * 0.4)
+    .composite([{ input: overlay, blend: 'soft-light' }])
     .jpeg({ quality: 92 })
     .toFile(outPath);
   await new Promise(r => setTimeout(r, 1200 + Math.random() * 1500));
