@@ -150,8 +150,8 @@
             <template v-else>
                 <div v-if="generating" class="result-loading">
           <el-progress type="circle" :percentage="fakePercent" :width="96" />
-          <p class="text-secondary">AI正在重绘灯光效果，请稍候…</p>
-          <p class="text-secondary small">通常需要 10–40 秒</p>
+          <p class="text-secondary">{{ loadingStage }}</p>
+          <p class="text-secondary small">通常需要 30 秒 ~ 2 分钟 · 可以先去逛逛别的页面，好了会通知你</p>
         </div>
 
                 <div v-else-if="batchResults.length" class="batch-wrap">
@@ -276,7 +276,7 @@ import { apiUpload, apiStyles, apiGenerate, apiGenerateStatus, apiGenerateBatch,
 import { useUserStore } from '@/stores/user'
 import { useTasksStore } from '@/stores/tasks'
 import CompareSlider from '@/components/CompareSlider.vue'
-import { compressImage, requestNotifyPermission, notifyDone } from '@/utils/media'
+import { compressImage, requestNotifyPermission } from '@/utils/media'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -321,6 +321,20 @@ const uploadPercent = ref(0)
 const generating = ref(false)
 const fakePercent = ref(0)
 const result = ref(null)
+
+// 等待动画：按魔搭Qwen-Image-Edit实测均值（约70秒）校准的缓动曲线，
+// 而不是瞎走的随机数——前段涨得快给用户"有进展"的感觉，后段放缓避免真等久了时数字先到100%空等。
+const EXPECTED_MS = 70000
+const LOADING_STAGES = ['正在分析房间结构与材质…', 'AI正在重新规划光源与阴影…', '渲染灯光细节中…', '接近完成，最后精修中…']
+const loadingStage = ref(LOADING_STAGES[0])
+let genStartTs = 0
+const tickProgress = () => {
+  const elapsed = Date.now() - genStartTs
+  const ratio = 1 - Math.exp(-elapsed / EXPECTED_MS * 2.2)
+  fakePercent.value = Math.min(92, Math.round(ratio * 100))
+  const stageIdx = Math.min(LOADING_STAGES.length - 1, Math.floor(elapsed / (EXPECTED_MS / LOADING_STAGES.length)))
+  loadingStage.value = LOADING_STAGES[stageIdx]
+}
 
 // 会话画廊：本次会话里每张成功的生成结果都留档（跨多轮生成），随时点回去对比、
 // 一键恢复那张图的参数继续调——生成不再是"新的覆盖旧的"的单行道
@@ -373,6 +387,18 @@ onMounted(async () => {
     if (route.query[k] != null && route.query[k] !== '') params[k] = Number(route.query[k])
   }
   userStore.fetchMe()
+
+  // 刷新页面会清空本组件所有状态（包括"正在生成"），但后端任务本身没受影响——
+  // 从任务中心里找一下这个页面自己发起、还没被上面 fileId 逻辑覆盖的任务，接回来，
+  // 不然用户中途刷新一下就会看着"上传照片"的空白页，以为生成结果凭空丢了
+  if (!source.fileId) {
+    const RESUME_WINDOW_MS = 10 * 60 * 1000
+    const candidate = tasksStore.tasks
+      .filter(t => (t.kind === 'generate' || t.kind === 'batch') && t.sourcePath === '/studio')
+      .filter(t => t.status === 'running' || Date.now() - (t.finishedAt || 0) < RESUME_WINDOW_MS)
+      .sort((a, b) => b.createdAt - a.createdAt)[0]
+    if (candidate) resumeTask(candidate)
+  }
 })
 
 onBeforeUnmount(() => stopTimers())
@@ -380,6 +406,88 @@ onBeforeUnmount(() => stopTimers())
 const stopTimers = () => {
   clearInterval(pollTimer); clearInterval(fakeTimer); clearTimeout(timeoutTimer)
   pollTimer = fakeTimer = timeoutTimer = null
+}
+
+// `step` computed 靠 source.fileId 是否有值判断"是不是还在第1步"——正常流程里传照片时早就设好了，
+// 但恢复（刷新后重新接上）流程是直接拿到生成结果的，从没走过上传，得从结果的 sourceUrl 反推回去，
+// 不然结果已经存进 result.value 了，页面却因为 fileId 是空的而一直卡在"上传照片"那一步
+const adoptSource = r => {
+  // 无条件覆盖：正常流程里这本来就是同一张图、覆盖了也是原值；
+  // 恢复流程里则是拿真实值去替换掉 resumeTask 里临时占位的 task.id，两种场景都要覆盖，不能设"已有值就跳过"的守卫
+  if (r?.sourceUrl) {
+    source.url = r.sourceUrl
+    source.fileId = r.sourceUrl.split('/').pop()
+  }
+}
+const watchSingle = id => {
+  pollTimer = setInterval(async () => {
+    try {
+      const g = await apiGenerateStatus(id)
+      if (g.status === 'success' || g.status === 'failed') {
+        stopTimers()
+        fakePercent.value = 100
+        adoptSource(g)
+        result.value = g
+        pushToGallery(g)
+        generating.value = false
+        if (g.status === 'success') ElMessage.success('生成完成！')
+        else userStore.fetchMe()
+      }
+    } catch (e) {  }
+  }, 1500)
+}
+const watchBatch = batchId => {
+  pollTimer = setInterval(async () => {
+    try {
+      const data = await apiBatchStatus(batchId)
+      batchResults.value = data.list
+      if (data.done) {
+        stopTimers()
+        fakePercent.value = 100
+        generating.value = false
+        adoptSource(data.list[0])
+        const okList = data.list.filter(i => i.status === 'success')
+        result.value = okList[0] || null
+        for (const g of okList) pushToGallery(g)
+        ElMessage.success(`连拍完成：成功${okList.length}张`)
+        if (okList.length < data.list.length) userStore.fetchMe()
+      }
+    } catch (e) {  }
+  }, 1500)
+}
+// 恢复一个任务中心里找到的、属于本页的任务：已经跑完的直接拉结果展示，还在跑的接回loading UI继续等
+const resumeTask = async task => {
+  if (task.status !== 'running') {
+    try {
+      if (task.kind === 'generate') {
+        const g = await apiGenerateStatus(task.id)
+        adoptSource(g)
+        result.value = g
+        pushToGallery(g)
+      } else {
+        const data = await apiBatchStatus(task.id)
+        batchResults.value = data.list
+        adoptSource(data.list[0])
+        const okList = data.list.filter(i => i.status === 'success')
+        result.value = okList[0] || null
+        for (const g of okList) pushToGallery(g)
+      }
+    } catch (e) {  }
+    return
+  }
+  // 还没等到结果，没法从 sourceUrl 反推，先用任务id占位把 step 撑到第3步显示loading，
+  // 等 watchSingle/watchBatch 真正拿到结果时 adoptSource 会用 sourceUrl 覆盖成正确值
+  source.fileId = task.id
+  generating.value = true
+  fakePercent.value = 0
+  genStartTs = task.createdAt
+  loadingStage.value = LOADING_STAGES[0]
+  fakeTimer = setInterval(tickProgress, 400)
+  timeoutTimer = setTimeout(() => {
+    if (generating.value) { stopTimers(); generating.value = false; ElMessage.error('生成超时，请重试') }
+  }, Math.max(5000, 185000 - (Date.now() - task.createdAt)))
+  if (task.kind === 'generate') watchSingle(task.id)
+  else watchBatch(task.id)
 }
 const pickFile = () => fileInput.value.click()
 const onFileChange = e => { const f = e.target.files[0]; if (f) doUpload(f); e.target.value = '' }
@@ -542,31 +650,17 @@ const generateBatch = async () => {
   result.value = null
   batchResults.value = []
   compareMode.value = false
-  fakeTimer = setInterval(() => { if (fakePercent.value < 95) fakePercent.value += Math.ceil(Math.random() * 3) }, 400)
+  genStartTs = Date.now()
+  loadingStage.value = LOADING_STAGES[0]
+  fakeTimer = setInterval(tickProgress, 400)
   timeoutTimer = setTimeout(() => {
     if (generating.value) { stopTimers(); generating.value = false; ElMessage.error('生成超时，请重试') }
   }, 185000)
   try {
     const { batchId } = await apiGenerateBatch({ fileId: source.fileId, params: { ...params, maskId: maskId.value || undefined } })
     userStore.fetchMe()
-    tasksStore.track('batch', batchId, '四风格连拍', '/studio')
-    pollTimer = setInterval(async () => {
-      try {
-        const data = await apiBatchStatus(batchId)
-        batchResults.value = data.list
-        if (data.done) {
-          stopTimers()
-          fakePercent.value = 100
-          generating.value = false
-          const okList = data.list.filter(i => i.status === 'success')
-          result.value = okList[0] || null
-          for (const g of okList) pushToGallery(g)
-          ElMessage.success(`连拍完成：成功${okList.length}张`)
-          notifyDone(`4风格连拍完成，成功${okList.length}张`)
-          if (okList.length < data.list.length) userStore.fetchMe()
-        }
-      } catch (e) {  }
-    }, 1500)
+    tasksStore.track('batch', batchId, '四风格连拍', '/history', '/studio')
+    watchBatch(batchId)
   } catch (e) {
     handleGenError(e)
   }
@@ -581,7 +675,9 @@ const generate = async () => {
   result.value = null
   batchResults.value = []
   compareMode.value = false
-  fakeTimer = setInterval(() => { if (fakePercent.value < 95) fakePercent.value += Math.ceil(Math.random() * 4) }, 400)
+  genStartTs = Date.now()
+  loadingStage.value = LOADING_STAGES[0]
+  fakeTimer = setInterval(tickProgress, 400)
   timeoutTimer = setTimeout(() => {
     if (generating.value) { stopTimers(); generating.value = false; ElMessage.error('生成超时，请重试') }
   }, 185000)
@@ -589,21 +685,8 @@ const generate = async () => {
   try {
     const { id } = await apiGenerate({ fileId: source.fileId, params: { ...params, maskId: maskId.value || undefined } })
     userStore.fetchMe()
-    tasksStore.track('generate', id, `${styleNames[params.style] || '灯光'} · 单张生成`, '/studio')
-    pollTimer = setInterval(async () => {
-      try {
-        const g = await apiGenerateStatus(id)
-        if (g.status === 'success' || g.status === 'failed') {
-          stopTimers()
-          fakePercent.value = 100
-          result.value = g
-          pushToGallery(g)
-          generating.value = false
-          if (g.status === 'success') { ElMessage.success('生成完成！'); notifyDone() }
-          else userStore.fetchMe()
-        }
-      } catch (e) {  }
-    }, 1500)
+    tasksStore.track('generate', id, `${styleNames[params.style] || '灯光'} · 单张生成`, `/report/${id}`, '/studio')
+    watchSingle(id)
   } catch (e) {
     handleGenError(e)
   }

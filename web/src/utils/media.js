@@ -29,14 +29,16 @@ export function requestNotifyPermission() {
 }
 
 let flashTimer = null
-export function notifyDone(text = 'AI灯光效果已生成完成！') {
-  if (!document.hidden) return
+// text：通知正文；onClick：点击系统通知后要做的事（一般是跳转到结果页）——
+// 是否该弹这条通知由调用方判断（比如"用户是不是已经不在这个任务所在的页面了"），这里只负责怎么弹。
+export function notifyDone(text = 'AI灯光效果已生成完成！', onClick) {
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       const n = new Notification('代码工匠AI灯光设计', { body: text })
-      n.onclick = () => { window.focus(); n.close() }
+      n.onclick = () => { window.focus(); n.close(); onClick && onClick() }
     } catch (e) {  }
   }
+  if (!document.hidden) return // 标签页本来就在前台，没必要闪标题
   const original = document.title
   clearInterval(flashTimer)
   flashTimer = setInterval(() => {
